@@ -14,3 +14,48 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Returns current BTC price, technical indicators, and current strategy zone
+ * @summary Get BTC dashboard data
+ */
+export const GetBtcDashboardResponse = zod.object({
+  currentPrice: zod.number().describe("Current BTC\/USD price"),
+  wma200w: zod.number().describe("200-Week Weighted Moving Average"),
+  ema20w: zod.number().describe("20-Week Exponential Moving Average"),
+  sma200d: zod.number().describe("200-Day Simple Moving Average"),
+  zone: zod.enum([
+    "MAX_ACCUMULATION",
+    "AGGRESSIVE_BUY",
+    "STANDARD_BUY_LOW",
+    "STANDARD_BUY_HIGH",
+    "TAKE_PROFIT",
+  ]),
+  zoneLabel: zod.string().describe("Human-readable zone label"),
+  zoneColor: zod.string().describe("Color associated with the zone (hex)"),
+  actionText: zod.string().describe("Recommended action for the current zone"),
+  lastUpdated: zod.coerce.date().describe("Timestamp of the last data fetch"),
+});
+
+/**
+ * Returns historical BTC price with overlaid moving averages for charting
+ * @summary Get BTC chart data
+ */
+export const GetBtcChartResponse = zod.object({
+  points: zod.array(
+    zod.object({
+      date: zod.coerce.date(),
+      price: zod.number().nullable(),
+      wma200w: zod.number().nullish(),
+      ema20w: zod.number().nullish(),
+      sma200d: zod.number().nullish(),
+    }),
+  ),
+  currentZone: zod.enum([
+    "MAX_ACCUMULATION",
+    "AGGRESSIVE_BUY",
+    "STANDARD_BUY_LOW",
+    "STANDARD_BUY_HIGH",
+    "TAKE_PROFIT",
+  ]),
+});

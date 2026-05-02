@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: btc
+    description: Bitcoin data and strategy indicators
 paths:
   /healthz:
     get:
@@ -24,6 +26,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /btc/dashboard:
+    get:
+      operationId: getBtcDashboard
+      tags: [btc]
+      summary: Get BTC dashboard data
+      description: Returns current BTC price, technical indicators, and current strategy zone
+      responses:
+        "200":
+          description: BTC dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BtcDashboard"
+        "500":
+          description: Error fetching data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /btc/chart:
+    get:
+      operationId: getBtcChart
+      tags: [btc]
+      summary: Get BTC chart data
+      description: Returns historical BTC price with overlaid moving averages for charting
+      responses:
+        "200":
+          description: BTC chart data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BtcChartData"
+        "500":
+          description: Error fetching data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +73,91 @@ components:
           type: string
       required:
         - status
-
+    BtcZone:
+      type: string
+      enum:
+        - MAX_ACCUMULATION
+        - AGGRESSIVE_BUY
+        - STANDARD_BUY_LOW
+        - STANDARD_BUY_HIGH
+        - TAKE_PROFIT
+    BtcDashboard:
+      type: object
+      properties:
+        currentPrice:
+          type: number
+          description: Current BTC/USD price
+        wma200w:
+          type: number
+          description: 200-Week Weighted Moving Average
+        ema20w:
+          type: number
+          description: 20-Week Exponential Moving Average
+        sma200d:
+          type: number
+          description: 200-Day Simple Moving Average
+        zone:
+          $ref: "#/components/schemas/BtcZone"
+        zoneLabel:
+          type: string
+          description: Human-readable zone label
+        zoneColor:
+          type: string
+          description: Color associated with the zone (hex)
+        actionText:
+          type: string
+          description: Recommended action for the current zone
+        lastUpdated:
+          type: string
+          format: date-time
+          description: Timestamp of the last data fetch
+      required:
+        - currentPrice
+        - wma200w
+        - ema20w
+        - sma200d
+        - zone
+        - zoneLabel
+        - zoneColor
+        - actionText
+        - lastUpdated
+    BtcChartPoint:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        price:
+          type: number
+          nullable: true
+        wma200w:
+          type: number
+          nullable: true
+        ema20w:
+          type: number
+          nullable: true
+        sma200d:
+          type: number
+          nullable: true
+      required:
+        - date
+        - price
+    BtcChartData:
+      type: object
+      properties:
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/BtcChartPoint"
+        currentZone:
+          $ref: "#/components/schemas/BtcZone"
+      required:
+        - points
+        - currentZone
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error

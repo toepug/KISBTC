@@ -8,3 +8,50 @@
 export interface HealthStatus {
   status: string;
 }
+
+export type BtcZone = (typeof BtcZone)[keyof typeof BtcZone];
+
+export const BtcZone = {
+  MAX_ACCUMULATION: "MAX_ACCUMULATION",
+  AGGRESSIVE_BUY: "AGGRESSIVE_BUY",
+  STANDARD_BUY_LOW: "STANDARD_BUY_LOW",
+  STANDARD_BUY_HIGH: "STANDARD_BUY_HIGH",
+  TAKE_PROFIT: "TAKE_PROFIT",
+} as const;
+
+export interface BtcDashboard {
+  /** Current BTC/USD price */
+  currentPrice: number;
+  /** 200-Week Weighted Moving Average */
+  wma200w: number;
+  /** 20-Week Exponential Moving Average */
+  ema20w: number;
+  /** 200-Day Simple Moving Average */
+  sma200d: number;
+  zone: BtcZone;
+  /** Human-readable zone label */
+  zoneLabel: string;
+  /** Color associated with the zone (hex) */
+  zoneColor: string;
+  /** Recommended action for the current zone */
+  actionText: string;
+  /** Timestamp of the last data fetch */
+  lastUpdated: string;
+}
+
+export interface BtcChartPoint {
+  date: string;
+  price: number | null;
+  wma200w?: number | null;
+  ema20w?: number | null;
+  sma200d?: number | null;
+}
+
+export interface BtcChartData {
+  points: BtcChartPoint[];
+  currentZone: BtcZone;
+}
+
+export interface ApiError {
+  error: string;
+}

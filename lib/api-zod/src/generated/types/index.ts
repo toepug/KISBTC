@@ -6,4 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./apiError";
+export * from "./btcChartData";
+export * from "./btcChartPoint";
+export * from "./btcDashboard";
+export * from "./btcZone";
 export * from "./healthStatus";

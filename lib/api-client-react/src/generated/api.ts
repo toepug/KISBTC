@@ -13,7 +13,12 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ApiError,
+  BtcChartData,
+  BtcDashboard,
+  HealthStatus,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
 import type { ErrorType } from "../custom-fetch";
@@ -92,6 +97,158 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns current BTC price, technical indicators, and current strategy zone
+ * @summary Get BTC dashboard data
+ */
+export const getGetBtcDashboardUrl = () => {
+  return `/api/btc/dashboard`;
+};
+
+export const getBtcDashboard = async (
+  options?: RequestInit,
+): Promise<BtcDashboard> => {
+  return customFetch<BtcDashboard>(getGetBtcDashboardUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBtcDashboardQueryKey = () => {
+  return [`/api/btc/dashboard`] as const;
+};
+
+export const getGetBtcDashboardQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBtcDashboard>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBtcDashboard>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBtcDashboardQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBtcDashboard>>> = ({
+    signal,
+  }) => getBtcDashboard({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBtcDashboard>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBtcDashboardQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBtcDashboard>>
+>;
+export type GetBtcDashboardQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Get BTC dashboard data
+ */
+
+export function useGetBtcDashboard<
+  TData = Awaited<ReturnType<typeof getBtcDashboard>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBtcDashboard>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBtcDashboardQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns historical BTC price with overlaid moving averages for charting
+ * @summary Get BTC chart data
+ */
+export const getGetBtcChartUrl = () => {
+  return `/api/btc/chart`;
+};
+
+export const getBtcChart = async (
+  options?: RequestInit,
+): Promise<BtcChartData> => {
+  return customFetch<BtcChartData>(getGetBtcChartUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBtcChartQueryKey = () => {
+  return [`/api/btc/chart`] as const;
+};
+
+export const getGetBtcChartQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBtcChart>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBtcChart>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBtcChartQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBtcChart>>> = ({
+    signal,
+  }) => getBtcChart({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBtcChart>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBtcChartQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBtcChart>>
+>;
+export type GetBtcChartQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Get BTC chart data
+ */
+
+export function useGetBtcChart<
+  TData = Awaited<ReturnType<typeof getBtcChart>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBtcChart>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBtcChartQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
