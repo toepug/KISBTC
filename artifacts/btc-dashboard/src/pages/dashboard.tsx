@@ -265,10 +265,22 @@ export default function Dashboard() {
 
             {/* 200W WMA */}
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              <Card className="bg-card border-border h-full">
+              <Card
+                className="h-full relative overflow-hidden"
+                style={{
+                  backgroundColor:
+                    dash.pctFromWma200w != null && dash.pctFromWma200w < 5
+                      ? "#ef444412"
+                      : undefined,
+                  borderColor:
+                    dash.pctFromWma200w != null && dash.pctFromWma200w < 5
+                      ? "#ef444455"
+                      : undefined,
+                }}
+              >
                 <CardHeader className="p-4 pb-1">
                   <CardTitle className="text-xs text-muted-foreground font-semibold uppercase tracking-widest">
-                    200W WMA
+                    200W WMA — Floor
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-1">
@@ -276,9 +288,23 @@ export default function Dashboard() {
                     {formatUsd(dash.wma200w)}
                   </div>
                   {dash.pctFromWma200w != null && (
-                    <div className="mt-1">
-                      <PctBadge pct={dash.pctFromWma200w} />
-                      <span className="text-xs text-muted-foreground ml-1">vs price</span>
+                    <div className="mt-2 space-y-1">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                        Distance to Floor
+                      </p>
+                      <div className="flex items-baseline gap-1.5">
+                        <span
+                          className="text-2xl font-black font-mono tabular-nums"
+                          style={{ color: dash.pctFromWma200w < 5 ? "#ef4444" : dash.pctFromWma200w < 15 ? "#eab308" : "#22c55e" }}
+                        >
+                          +{dash.pctFromWma200w.toFixed(2)}%
+                        </span>
+                      </div>
+                      {dash.pctFromWma200w < 10 && (
+                        <p className="text-[10px] font-semibold" style={{ color: "#ef4444" }}>
+                          Near historic floor — high conviction signal
+                        </p>
+                      )}
                     </div>
                   )}
                 </CardContent>
