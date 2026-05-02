@@ -141,7 +141,7 @@ export default function Dashboard() {
   const tp100 = tpSma * 2.00;
   const fmtTpLabel = (v: number) => `$${(v / 1000).toFixed(0)}k`;
 
-  // Chart Y-axis bounds
+  // Chart Y-axis bounds + augmented points with TP constants injected
   const chartPrices = (chartData as any)?.points?.map((p: any) => p.price).filter(Boolean) as number[] | undefined;
   const chartDataMax = chartPrices?.length ? Math.max(...chartPrices) : 0;
   const chartDataMin = chartPrices?.length ? Math.min(...chartPrices) : 0;
@@ -149,6 +149,16 @@ export default function Dashboard() {
     ? Math.max(chartDataMax, tp100) * 1.04
     : chartDataMax * 1.04;
   const chartYMin = chartDataMin * 0.96;
+
+  // Inject constant TP fields onto every chart point so Line components can render them.
+  // Always inject (undefined when hidden) so Recharts never deals with dynamic Line children.
+  const rawPoints: Record<string, unknown>[] = (chartData as any)?.points ?? [];
+  const chartPoints = rawPoints.map((p) => ({
+    ...p,
+    _tp50:  showTpLines && tpSma > 0 ? tp50  : undefined,
+    _tp80:  showTpLines && tpSma > 0 ? tp80  : undefined,
+    _tp100: showTpLines && tpSma > 0 ? tp100 : undefined,
+  }));
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-5">
@@ -462,8 +472,8 @@ export default function Dashboard() {
               <div className="h-[420px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
-                    data={chartData.points}
-                    margin={{ top: 10, right: 68, left: 8, bottom: 0 }}
+                    data={chartPoints}
+                    margin={{ top: 10, right: 8, left: 8, bottom: 0 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                     <XAxis
@@ -492,6 +502,13 @@ export default function Dashboard() {
                       iconType="circle"
                       iconSize={8}
                       wrapperStyle={{ paddingTop: "16px", fontSize: "12px" }}
+                      formatter={(value: string) => value.startsWith("_") ? null : value}
+                      payload={[
+                        { value: "BTC Price",  type: "circle", id: "price",   color: "hsl(var(--foreground))" },
+                        { value: "200W WMA",   type: "circle", id: "wma200w", color: "#ef4444" },
+                        { value: "20W EMA",    type: "circle", id: "ema20w",  color: "#3b82f6" },
+                        { value: "200D SMA",   type: "circle", id: "sma200d", color: "#eab308" },
+                      ]}
                     />
                     <Line
                       yAxisId="price"
@@ -544,39 +561,64 @@ export default function Dashboard() {
                         label={{ value: "Now", position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                       />
                     )}
-                    {showTpLines && tpSma > 0 && (
-                      <>
-                        <ReferenceLine
-                          yAxisId="price"
-                          y={tp50}
-                          stroke="#f97316"
-                          strokeDasharray="6 3"
-                          strokeWidth={1.5}
-                          strokeOpacity={0.85}
-                          label={{ value: `TP1 50%  ${fmtTpLabel(tp50)}`, position: "right", fontSize: 10, fill: "#f97316", fontWeight: 600 }}
-                        />
-                        <ReferenceLine
-                          yAxisId="price"
-                          y={tp80}
-                          stroke="#ef4444"
-                          strokeDasharray="6 3"
-                          strokeWidth={1.5}
-                          strokeOpacity={0.85}
-                          label={{ value: `TP2 80%  ${fmtTpLabel(tp80)}`, position: "right", fontSize: 10, fill: "#ef4444", fontWeight: 600 }}
-                        />
-                        <ReferenceLine
-                          yAxisId="price"
-                          y={tp100}
-                          stroke="#dc2626"
-                          strokeDasharray="6 3"
-                          strokeWidth={1.5}
-                          strokeOpacity={0.85}
-                          label={{ value: `TP3 100% ${fmtTpLabel(tp100)}`, position: "right", fontSize: 10, fill: "#dc2626", fontWeight: 600 }}
-                        />
-                      </>
-                    )}
+                    <Line
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="_tp50"
+                      stroke="#f97316"
+                      strokeWidth={1.5}
+                      strokeDasharray="8 4"
+                      dot={false}
+                      legendType="none"
+                      isAnimationActive={false}
+                      connectNulls={false}
+                    />
+                    <Line
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="_tp80"
+                      stroke="#ef4444"
+                      strokeWidth={1.5}
+                      strokeDasharray="8 4"
+                      dot={false}
+                      legendType="none"
+                      isAnimationActive={false}
+                      connectNulls={false}
+                    />
+                    <Line
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="_tp100"
+                      stroke="#dc2626"
+                      strokeWidth={1.5}
+                      strokeDasharray="8 4"
+                      dot={false}
+                      legendType="none"
+                      isAnimationActive={false}
+                      connectNulls={false}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+            {showTpLines && tpSma > 0 && (
+              <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-border">
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block w-6 border-t-2 border-dashed border-[#f97316]" />
+                  <span className="text-xs font-semibold text-[#f97316]">TP1 +50%</span>
+                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp50)}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block w-6 border-t-2 border-dashed border-[#ef4444]" />
+                  <span className="text-xs font-semibold text-[#ef4444]">TP2 +80%</span>
+                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp80)}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block w-6 border-t-2 border-dashed border-[#dc2626]" />
+                  <span className="text-xs font-semibold text-[#dc2626]">TP3 +100%</span>
+                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp100)}</span>
+                </div>
+                <span className="text-xs text-muted-foreground ml-auto self-center">Based on 200D SMA × 1.5 / 1.8 / 2.0</span>
               </div>
             )}
           </CardContent>
