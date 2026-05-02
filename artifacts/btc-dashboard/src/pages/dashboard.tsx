@@ -292,19 +292,7 @@ export default function Dashboard() {
 
             {/* 200W WMA */}
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              <Card
-                className="h-full relative overflow-hidden"
-                style={{
-                  backgroundColor:
-                    dash.pctFromWma200w != null && dash.pctFromWma200w < 5
-                      ? "#ef444412"
-                      : undefined,
-                  borderColor:
-                    dash.pctFromWma200w != null && dash.pctFromWma200w < 5
-                      ? "#ef444455"
-                      : undefined,
-                }}
-              >
+              <Card className="h-full relative overflow-hidden">
                 <CardHeader className="p-4 pb-1">
                   <CardTitle className="text-xs text-muted-foreground font-semibold uppercase tracking-widest">
                     200W WMA — Floor
@@ -327,11 +315,6 @@ export default function Dashboard() {
                           +{dash.pctFromWma200w.toFixed(2)}%
                         </span>
                       </div>
-                      {dash.pctFromWma200w < 10 && (
-                        <p className="text-[10px] font-semibold" style={{ color: "#ef4444" }}>
-                          Near historic floor — high conviction signal
-                        </p>
-                      )}
                     </div>
                   )}
                 </CardContent>

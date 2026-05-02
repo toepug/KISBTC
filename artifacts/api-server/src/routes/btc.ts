@@ -187,14 +187,15 @@ const ZONE_COLORS: Record<BtcZone, string> = {
 
 const ZONE_ACTIONS: Record<BtcZone, string> = {
   MAX_ACCUMULATION:
-    "Rare opportunity — accumulate aggressively. Deploy maximum capital now.",
+    "Double your contribution ($1,000) — price is at or below the 200W WMA. Deploy maximum capital.",
   AGGRESSIVE_BUY:
-    "Strong buy signal — price is below 20W EMA. Consider doubling your regular contribution.",
-  STANDARD_BUY_LOW: "Standard Buy: Contribute your regular DCA amount today.",
+    "Contribute $750 — price is below the 20W EMA. Strong buy signal.",
+  STANDARD_BUY_LOW:
+    "Contribute $500 — standard DCA range.",
   STANDARD_BUY_HIGH:
-    "Elevated but not extreme — price is 25–50% above 200D SMA. Continue standard DCA with caution.",
+    "Contribute $300 — price is 25–50% above 200D SMA. Reduce contribution size.",
   TAKE_PROFIT:
-    "Price is 50%+ above 200D SMA. Consider taking partial profits.",
+    "Contribute $0 — price is 50%+ above 200D SMA. No new buys; manage exits only.",
 };
 
 // Cache for 10 minutes
