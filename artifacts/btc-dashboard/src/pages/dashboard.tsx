@@ -12,7 +12,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { Activity, Clock, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Activity, Clock, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Minus, Eye, EyeOff } from "lucide-react";
 import {
   useGetBtcDashboard,
   useGetBtcChart,
@@ -93,6 +93,7 @@ const ZONE_THRESHOLDS = [
 
 export default function Dashboard() {
   const [now, setNow] = useState(new Date());
+  const [showTpLines, setShowTpLines] = useState(true);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
@@ -132,6 +133,22 @@ export default function Dashboard() {
     dailyCandlesUsed?: number;
     weeklyCandlesUsed?: number;
   };
+
+  // Take-profit levels derived from 200D SMA
+  const tpSma = dash?.sma200d ?? 0;
+  const tp50  = tpSma * 1.50;
+  const tp80  = tpSma * 1.80;
+  const tp100 = tpSma * 2.00;
+  const fmtTpLabel = (v: number) => `$${(v / 1000).toFixed(0)}k`;
+
+  // Chart Y-axis bounds
+  const chartPrices = (chartData as any)?.points?.map((p: any) => p.price).filter(Boolean) as number[] | undefined;
+  const chartDataMax = chartPrices?.length ? Math.max(...chartPrices) : 0;
+  const chartDataMin = chartPrices?.length ? Math.min(...chartPrices) : 0;
+  const chartYMax = showTpLines && tp100 > 0
+    ? Math.max(chartDataMax, tp100) * 1.04
+    : chartDataMax * 1.04;
+  const chartYMin = chartDataMin * 0.96;
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-5">
@@ -420,12 +437,23 @@ export default function Dashboard() {
         <Card className="bg-card border-border">
           <CardHeader className="p-4 border-b border-border flex flex-row items-center gap-2">
             <Activity className="w-5 h-5 text-primary shrink-0" />
-            <div>
+            <div className="flex-1 min-w-0">
               <CardTitle className="text-base">Price vs Moving Averages (2-Year Daily)</CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                BTC price with 200W WMA · 20W EMA · 200D SMA overlaid
+                BTC price with 200W WMA · 20W EMA · 200D SMA · Take Profit levels
               </p>
             </div>
+            <button
+              onClick={() => setShowTpLines((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors shrink-0 ${
+                showTpLines
+                  ? "border-orange-500/50 bg-orange-950/30 text-orange-400 hover:bg-orange-950/50"
+                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+              }`}
+            >
+              {showTpLines ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              TP Lines
+            </button>
           </CardHeader>
           <CardContent className="p-4 md:p-6">
             {isChartLoading || !chartData ? (
@@ -435,7 +463,7 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
                     data={chartData.points}
-                    margin={{ top: 10, right: 8, left: 8, bottom: 0 }}
+                    margin={{ top: 10, right: 68, left: 8, bottom: 0 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                     <XAxis
@@ -456,7 +484,7 @@ export default function Dashboard() {
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
-                      domain={["auto", "auto"]}
+                      domain={[chartYMin, chartYMax]}
                       width={48}
                     />
                     <Tooltip content={<CustomTooltip />} />
@@ -515,6 +543,37 @@ export default function Dashboard() {
                         strokeOpacity={0.4}
                         label={{ value: "Now", position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                       />
+                    )}
+                    {showTpLines && tpSma > 0 && (
+                      <>
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={tp50}
+                          stroke="#f97316"
+                          strokeDasharray="6 3"
+                          strokeWidth={1.5}
+                          strokeOpacity={0.85}
+                          label={{ value: `TP1 50%  ${fmtTpLabel(tp50)}`, position: "right", fontSize: 10, fill: "#f97316", fontWeight: 600 }}
+                        />
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={tp80}
+                          stroke="#ef4444"
+                          strokeDasharray="6 3"
+                          strokeWidth={1.5}
+                          strokeOpacity={0.85}
+                          label={{ value: `TP2 80%  ${fmtTpLabel(tp80)}`, position: "right", fontSize: 10, fill: "#ef4444", fontWeight: 600 }}
+                        />
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={tp100}
+                          stroke="#dc2626"
+                          strokeDasharray="6 3"
+                          strokeWidth={1.5}
+                          strokeOpacity={0.85}
+                          label={{ value: `TP3 100% ${fmtTpLabel(tp100)}`, position: "right", fontSize: 10, fill: "#dc2626", fontWeight: 600 }}
+                        />
+                      </>
                     )}
                   </LineChart>
                 </ResponsiveContainer>
