@@ -20,7 +20,7 @@ interface KrakenTickerResult {
   error: string[];
   result: {
     XXBTZUSD: {
-      c: [string, string]; // [last trade price, lot volume]
+      c: [string, string];
     };
   };
 }
@@ -32,6 +32,43 @@ async function fetchUrl(url: string): Promise<globalThis.Response> {
   });
   if (!res.ok) throw new Error(`Kraken API returned ${res.status}`);
   return res;
+}
+
+/** Fetch up to maxPages * 720 daily candles by walking backwards with `since` */
+async function fetchDailyCandles(targetDays: number): Promise<KrakenOhlcRow[]> {
+  const allRows: KrakenOhlcRow[] = [];
+  const seenTimes = new Set<number>();
+
+  // Page 1: most recent 720 days (no since param)
+  const page1Res = await fetchUrl(`${KRAKEN_BASE}/OHLC?pair=XBTUSD&interval=1440`);
+  const page1 = (await page1Res.json()) as KrakenOhlcResult;
+  if (page1.error?.length) throw new Error("Kraken error: " + JSON.stringify(page1.error));
+  for (const row of page1.result.XXBTZUSD) {
+    if (!seenTimes.has(row[0])) { seenTimes.add(row[0]); allRows.push(row); }
+  }
+
+  // If we need more, fetch an earlier page using the oldest timestamp we have
+  if (allRows.length < targetDays && allRows.length > 0) {
+    const oldestTs = Math.min(...allRows.map((r) => r[0]));
+    // Go back targetDays from now; since is in seconds
+    const sinceTs = Math.floor(Date.now() / 1000) - targetDays * 86400;
+    const page2Res = await fetchUrl(
+      `${KRAKEN_BASE}/OHLC?pair=XBTUSD&interval=1440&since=${sinceTs}`
+    );
+    const page2 = (await page2Res.json()) as KrakenOhlcResult;
+    if (!page2.error?.length) {
+      for (const row of page2.result.XXBTZUSD) {
+        if (!seenTimes.has(row[0]) && row[0] < oldestTs) {
+          seenTimes.add(row[0]);
+          allRows.push(row);
+        }
+      }
+    }
+  }
+
+  // Sort ascending by timestamp
+  allRows.sort((a, b) => a[0] - b[0]);
+  return allRows;
 }
 
 function calcSMA(prices: number[], period: number): (number | null)[] {
@@ -60,6 +97,7 @@ function calcEMA(prices: number[], period: number): (number | null)[] {
   return result;
 }
 
+// Linear Weighted Moving Average: most recent price gets weight N, oldest gets weight 1
 function calcWMA(prices: number[], period: number): (number | null)[] {
   return prices.map((_, i) => {
     if (i < period - 1) return null;
@@ -67,7 +105,7 @@ function calcWMA(prices: number[], period: number): (number | null)[] {
     let weightedSum = 0;
     let weightTotal = 0;
     for (let j = 0; j < period; j++) {
-      const w = j + 1;
+      const w = j + 1; // weight 1 = oldest, weight N = newest
       weightedSum += slice[j] * w;
       weightTotal += w;
     }
@@ -82,17 +120,53 @@ type BtcZone =
   | "STANDARD_BUY_HIGH"
   | "TAKE_PROFIT";
 
+interface ZoneResult {
+  zone: BtcZone;
+  triggerIndicator: string;
+  triggerDetail: string;
+}
+
 function determineZone(
   price: number,
   wma200w: number,
   ema20w: number,
   sma200d: number
-): BtcZone {
-  if (price <= wma200w) return "MAX_ACCUMULATION";
-  if (price <= ema20w) return "AGGRESSIVE_BUY";
-  if (price <= sma200d * 1.25) return "STANDARD_BUY_LOW";
-  if (price < sma200d * 1.5) return "STANDARD_BUY_HIGH";
-  return "TAKE_PROFIT";
+): ZoneResult {
+  if (price <= wma200w) {
+    return {
+      zone: "MAX_ACCUMULATION",
+      triggerIndicator: "200W WMA",
+      triggerDetail: `Price ≤ 200W WMA ($${wma200w.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+    };
+  }
+  if (price <= ema20w) {
+    return {
+      zone: "AGGRESSIVE_BUY",
+      triggerIndicator: "20W EMA",
+      triggerDetail: `Price ≤ 20W EMA ($${ema20w.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+    };
+  }
+  const sma125 = sma200d * 1.25;
+  const sma150 = sma200d * 1.5;
+  if (price <= sma125) {
+    return {
+      zone: "STANDARD_BUY_LOW",
+      triggerIndicator: "200D SMA",
+      triggerDetail: `Price within 25% of 200D SMA ($${sma200d.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+    };
+  }
+  if (price < sma150) {
+    return {
+      zone: "STANDARD_BUY_HIGH",
+      triggerIndicator: "200D SMA",
+      triggerDetail: `Price 25–50% above 200D SMA ($${sma200d.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+    };
+  }
+  return {
+    zone: "TAKE_PROFIT",
+    triggerIndicator: "200D SMA",
+    triggerDetail: `Price ≥ 50% above 200D SMA ($${sma200d.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+  };
 }
 
 const ZONE_LABELS: Record<BtcZone, string> = {
@@ -115,15 +189,15 @@ const ZONE_ACTIONS: Record<BtcZone, string> = {
   MAX_ACCUMULATION:
     "Rare opportunity — accumulate aggressively. Deploy maximum capital now.",
   AGGRESSIVE_BUY:
-    "Strong buy signal — below 20W EMA. Consider doubling your regular contribution.",
+    "Strong buy signal — price is below 20W EMA. Consider doubling your regular contribution.",
   STANDARD_BUY_LOW: "Standard Buy: Contribute your regular DCA amount today.",
   STANDARD_BUY_HIGH:
-    "Elevated but not extreme. Continue standard DCA with caution.",
+    "Elevated but not extreme — price is 25–50% above 200D SMA. Continue standard DCA with caution.",
   TAKE_PROFIT:
     "Price is 50%+ above 200D SMA. Consider taking partial profits.",
 };
 
-// Cache for 10 minutes to reduce API calls
+// Cache for 10 minutes
 let cache: {
   dashboard: unknown;
   chart: unknown;
@@ -137,34 +211,24 @@ async function fetchBtcData() {
   if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
     return cache;
   }
-
-  if (fetchInFlight) {
-    return fetchInFlight;
-  }
+  if (fetchInFlight) return fetchInFlight;
 
   fetchInFlight = (async () => {
     try {
-      // Kraken OHLC max 720 candles per request
-      // daily = 1440 min interval → 720 days ≈ 2 years (enough for 200D SMA)
-      // weekly = 10080 min interval → 720 weeks ≈ 13.8 years (enough for 200W WMA)
-      const [dailyRes, weeklyRes, tickerRes] = await Promise.all([
-        fetchUrl(`${KRAKEN_BASE}/OHLC?pair=XBTUSD&interval=1440`),
+      // Fetch daily (1440+ days via pagination), weekly (720 weeks), and current price in parallel
+      const [dailyRows, weeklyRes, tickerRes] = await Promise.all([
+        fetchDailyCandles(1440),
         fetchUrl(`${KRAKEN_BASE}/OHLC?pair=XBTUSD&interval=10080`),
         fetchUrl(`${KRAKEN_BASE}/Ticker?pair=XBTUSD`),
       ]);
 
-      const dailyData = (await dailyRes.json()) as KrakenOhlcResult;
       const weeklyData = (await weeklyRes.json()) as KrakenOhlcResult;
       const tickerData = (await tickerRes.json()) as KrakenTickerResult;
 
-      if (dailyData.error?.length || weeklyData.error?.length) {
-        throw new Error("Kraken API error: " + JSON.stringify(dailyData.error));
-      }
+      if (weeklyData.error?.length) throw new Error("Kraken weekly error");
 
-      const dailyRows = dailyData.result.XXBTZUSD;
       const weeklyRows = weeklyData.result.XXBTZUSD;
 
-      // Extract close prices (index 4) and dates
       const dailyPrices = dailyRows.map((r) => parseFloat(r[4]));
       const dailyDates = dailyRows.map((r) =>
         new Date(r[0] * 1000).toISOString().split("T")[0]
@@ -174,7 +238,7 @@ async function fetchBtcData() {
         new Date(r[0] * 1000).toISOString().split("T")[0]
       );
 
-      // Current price from ticker (real-time last trade)
+      // Real-time last trade price
       const currentPrice = parseFloat(tickerData.result.XXBTZUSD.c[0]);
 
       // Calculate indicators
@@ -186,42 +250,50 @@ async function fetchBtcData() {
       const latestEma20w = ema20wArr.filter((v) => v !== null).at(-1) as number;
       const latestWma200w = wma200wArr.filter((v) => v !== null).at(-1) as number;
 
-      const zone = determineZone(
+      const zoneResult = determineZone(
         currentPrice,
         latestWma200w,
         latestEma20w,
         latestSma200d
       );
 
+      // Percentage distances from each indicator
+      const pctFromWma200w = ((currentPrice - latestWma200w) / latestWma200w) * 100;
+      const pctFromEma20w = ((currentPrice - latestEma20w) / latestEma20w) * 100;
+      const pctFromSma200d = ((currentPrice - latestSma200d) / latestSma200d) * 100;
+
       const dashboard = {
         currentPrice,
         wma200w: latestWma200w,
         ema20w: latestEma20w,
         sma200d: latestSma200d,
-        zone,
-        zoneLabel: ZONE_LABELS[zone],
-        zoneColor: ZONE_COLORS[zone],
-        actionText: ZONE_ACTIONS[zone],
+        zone: zoneResult.zone,
+        zoneLabel: ZONE_LABELS[zoneResult.zone],
+        zoneColor: ZONE_COLORS[zoneResult.zone],
+        actionText: ZONE_ACTIONS[zoneResult.zone],
+        triggerIndicator: zoneResult.triggerIndicator,
+        triggerDetail: zoneResult.triggerDetail,
+        pctFromWma200w: parseFloat(pctFromWma200w.toFixed(2)),
+        pctFromEma20w: parseFloat(pctFromEma20w.toFixed(2)),
+        pctFromSma200d: parseFloat(pctFromSma200d.toFixed(2)),
+        dailyCandlesUsed: dailyPrices.length,
+        weeklyCandlesUsed: weeklyPrices.length,
         lastUpdated: new Date().toISOString(),
       };
 
-      // Build chart with the last 2 years of daily data
-      // Map weekly indicators to each daily date using lookback
+      // Build chart: last 2 years of daily data with weekly indicators mapped to daily dates
       const chartWindowDays = 730;
       const startIdx = Math.max(0, dailyDates.length - chartWindowDays);
 
       let lastWeeklyIdx = 0;
       const points = dailyDates.slice(startIdx).map((date, idx) => {
         const absIdx = startIdx + idx;
-
-        // Advance weekly pointer while next weekly date is still ≤ current daily date
         while (
           lastWeeklyIdx + 1 < weeklyDates.length &&
           weeklyDates[lastWeeklyIdx + 1] <= date
         ) {
           lastWeeklyIdx++;
         }
-
         return {
           date,
           price: dailyPrices[absIdx],
@@ -231,17 +303,9 @@ async function fetchBtcData() {
         };
       });
 
-      const chartResponse = {
-        points,
-        currentZone: zone,
-      };
+      const chartResponse = { points, currentZone: zoneResult.zone };
 
-      cache = {
-        dashboard,
-        chart: chartResponse,
-        timestamp: Date.now(),
-      };
-
+      cache = { dashboard, chart: chartResponse, timestamp: Date.now() };
       return cache;
     } finally {
       fetchInFlight = null;
@@ -257,9 +321,7 @@ router.get("/btc/dashboard", async (req: Request, res: Response) => {
     res.json(data!.dashboard);
   } catch (err) {
     req.log.error({ err }, "Failed to fetch BTC dashboard data");
-    res
-      .status(500)
-      .json({ error: "Failed to fetch Bitcoin data. Please try again in a moment." });
+    res.status(500).json({ error: "Failed to fetch Bitcoin data. Please try again in a moment." });
   }
 });
 
@@ -269,9 +331,7 @@ router.get("/btc/chart", async (req: Request, res: Response) => {
     res.json(data!.chart);
   } catch (err) {
     req.log.error({ err }, "Failed to fetch BTC chart data");
-    res
-      .status(500)
-      .json({ error: "Failed to fetch Bitcoin chart data. Please try again." });
+    res.status(500).json({ error: "Failed to fetch Bitcoin chart data. Please try again." });
   }
 });
 
