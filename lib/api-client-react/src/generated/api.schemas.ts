@@ -84,6 +84,10 @@ export interface BtcChartPoint {
   wma200w?: number | null;
   ema20w?: number | null;
   sma200d?: number | null;
+  /** 14-period weekly RSI (forward-filled from weekly to daily) */
+  wRsi14?: number | null;
+  /** True when any heat index signal (RSI or SMA parabolic) is active on this date */
+  heatActive?: boolean | null;
 }
 
 export interface BtcChartData {

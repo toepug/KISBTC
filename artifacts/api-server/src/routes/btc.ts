@@ -447,12 +447,22 @@ async function fetchBtcData() {
         ) {
           lastWeeklyIdx++;
         }
+        const rsi = weeklyRsi14Arr[lastWeeklyIdx] ?? null;
+        const sma = sma200dArr[absIdx] ?? null;
+        const dailySmaAccVal = smaAccArr[absIdx] ?? null;
+        const smaAccT = sma != null ? sma * 0.003 : null;
+        const pctAboveSma = sma != null ? (dailyPrices[absIdx] - sma) / sma : null;
+        const heatActive =
+          (rsi != null && rsi > 80) ||
+          (dailySmaAccVal != null && smaAccT != null && dailySmaAccVal > smaAccT && pctAboveSma != null && pctAboveSma > 0.30);
         return {
           date,
           price: dailyPrices[absIdx],
           wma200w: wma200wArr[lastWeeklyIdx] ?? null,
           ema20w: ema20wArr[lastWeeklyIdx] ?? null,
-          sma200d: sma200dArr[absIdx] ?? null,
+          sma200d: sma,
+          wRsi14: rsi != null ? parseFloat(rsi.toFixed(2)) : null,
+          heatActive,
         };
       });
 

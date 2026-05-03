@@ -228,6 +228,14 @@ components:
         sma200d:
           type: number
           nullable: true
+        wRsi14:
+          type: number
+          nullable: true
+          description: 14-period weekly RSI (forward-filled from weekly to daily)
+        heatActive:
+          type: boolean
+          nullable: true
+          description: True when any heat index signal (RSI or SMA parabolic) is active on this date
       required:
         - date
         - price

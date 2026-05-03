@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import {
@@ -11,6 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceArea,
 } from "recharts";
 import { Activity, Clock, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Minus, Eye, EyeOff, Flame, ShieldCheck, ShieldAlert } from "lucide-react";
 import {
@@ -68,8 +69,9 @@ const TP_TOOLTIP_LABELS: Record<string, string> = {
 
 function CustomTooltip({ active, payload, label }: any) {
   if (active && payload && payload.length) {
-    const mainEntries = payload.filter((e: any) => !String(e.dataKey).startsWith("_tp"));
-    const tpEntries = payload.filter((e: any) => String(e.dataKey).startsWith("_tp"));
+    const mainEntries = payload.filter((e: any) => !String(e.dataKey).startsWith("_"));
+    const tpEntries   = payload.filter((e: any) => String(e.dataKey).startsWith("_tp"));
+    const rsiEntry    = payload.find((e: any) => e.dataKey === "_rsi");
     return (
       <div className="bg-card border border-border p-3 rounded-md shadow-lg min-w-[210px]">
         <p className="text-xs text-muted-foreground mb-2 font-mono">
@@ -84,6 +86,20 @@ function CustomTooltip({ active, payload, label }: any) {
             <span className="text-foreground font-mono">{formatUsd(entry.value)}</span>
           </div>
         ))}
+        {rsiEntry && (
+          <div className="mt-2 pt-2 border-t border-border/50">
+            <div className="flex items-center justify-between gap-4 text-xs font-medium py-0.5">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: rsiEntry.color }} />
+                <span className="text-muted-foreground">Weekly RSI-14</span>
+              </div>
+              <span className={`font-mono font-semibold ${rsiEntry.value > 80 ? "text-red-400" : rsiEntry.value > 65 ? "text-yellow-400" : "text-foreground"}`}>
+                {rsiEntry.value.toFixed(1)}
+                {rsiEntry.value > 80 && <span className="ml-1 text-[10px]">⚠ HEAT</span>}
+              </span>
+            </div>
+          </div>
+        )}
         {tpEntries.length > 0 && (
           <div className="mt-2 pt-2 border-t border-border/50">
             <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
@@ -122,6 +138,7 @@ const ZONE_THRESHOLDS = [
 export default function Dashboard() {
   const [now, setNow] = useState(new Date());
   const [showTpLines, setShowTpLines] = useState(true);
+  const [showRsi, setShowRsi] = useState(true);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
@@ -184,13 +201,31 @@ export default function Dashboard() {
   const rawPoints: Record<string, unknown>[] = (chartData as any)?.points ?? [];
   const chartPoints = rawPoints.map((p) => {
     const ptSma = p.sma200d as number | null | undefined;
+    const ptRsi = p.wRsi14 as number | null | undefined;
     return {
       ...p,
       _tp50:  showTpLines && ptSma != null ? ptSma * 1.5 : undefined,
       _tp80:  showTpLines && ptSma != null ? ptSma * 1.8 : undefined,
       _tp100: showTpLines && ptSma != null ? ptSma * 2.0 : undefined,
+      _rsi:   showRsi && ptRsi != null ? ptRsi : undefined,
     };
   });
+
+  // Compute contiguous date ranges where heat signals are active (for chart shading)
+  const heatRanges = useMemo(() => {
+    const ranges: Array<{ x1: string; x2: string }> = [];
+    let start: string | null = null;
+    for (const p of rawPoints) {
+      if (p.heatActive) {
+        if (!start) start = p.date as string;
+      } else if (start) {
+        ranges.push({ x1: start, x2: p.date as string });
+        start = null;
+      }
+    }
+    if (start) ranges.push({ x1: start, x2: (rawPoints.at(-1)?.date as string) ?? start });
+    return ranges;
+  }, [rawPoints]);
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-5">
@@ -605,17 +640,30 @@ export default function Dashboard() {
                 BTC price with 200W WMA · 20W EMA · 200D SMA · Take Profit levels
               </p>
             </div>
-            <button
-              onClick={() => setShowTpLines((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors shrink-0 ${
-                showTpLines
-                  ? "border-orange-500/50 bg-orange-950/30 text-orange-400 hover:bg-orange-950/50"
-                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
-              }`}
-            >
-              {showTpLines ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-              TP Lines
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setShowRsi((v) => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
+                  showRsi
+                    ? "border-red-500/50 bg-red-950/30 text-red-400 hover:bg-red-950/50"
+                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+                }`}
+              >
+                {showRsi ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                RSI
+              </button>
+              <button
+                onClick={() => setShowTpLines((v) => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
+                  showTpLines
+                    ? "border-orange-500/50 bg-orange-950/30 text-orange-400 hover:bg-orange-950/50"
+                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+                }`}
+              >
+                {showTpLines ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                TP Lines
+              </button>
+            </div>
           </CardHeader>
           <CardContent className="p-4 md:p-6">
             {isChartLoading || !chartData ? (
@@ -649,6 +697,21 @@ export default function Dashboard() {
                       domain={[chartYMin, chartYMax]}
                       width={48}
                     />
+                    {showRsi && (
+                      <YAxis
+                        yAxisId="rsi"
+                        orientation="right"
+                        domain={[0, 100]}
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(v) => `${v}`}
+                        ticks={[0, 30, 50, 70, 80, 100]}
+                        width={28}
+                        stroke="hsl(var(--muted-foreground))"
+                        opacity={0.5}
+                      />
+                    )}
                     <Tooltip content={<CustomTooltip />} />
                     <Legend
                       iconType="circle"
@@ -660,6 +723,7 @@ export default function Dashboard() {
                         { value: "200W WMA",   type: "circle", id: "wma200w", color: "#ef4444" },
                         { value: "20W EMA",    type: "circle", id: "ema20w",  color: "#3b82f6" },
                         { value: "200D SMA",   type: "circle", id: "sma200d", color: "#eab308" },
+                        ...(showRsi ? [{ value: "Weekly RSI-14", type: "circle" as const, id: "_rsi", color: "#f43f5e" }] : []),
                       ]}
                     />
                     <Line
@@ -777,6 +841,41 @@ export default function Dashboard() {
                       legendType="none"
                       isAnimationActive={false}
                       connectNulls={false}
+                    />
+                    {/* Heat zone shading — red tint over periods when RSI > 80 or SMA parabolic */}
+                    {showRsi && heatRanges.map((r, i) => (
+                      <ReferenceArea
+                        key={i}
+                        yAxisId="price"
+                        x1={r.x1}
+                        x2={r.x2}
+                        fill="#ef4444"
+                        fillOpacity={0.10}
+                      />
+                    ))}
+                    {/* RSI threshold line at 80 */}
+                    {showRsi && (
+                      <ReferenceLine
+                        yAxisId="rsi"
+                        y={80}
+                        stroke="#f43f5e"
+                        strokeDasharray="3 4"
+                        strokeOpacity={0.5}
+                        label={{ value: "RSI 80", position: "insideTopLeft", fontSize: 9, fill: "#f43f5e" }}
+                      />
+                    )}
+                    {/* RSI line — secondary axis, range 0-100 */}
+                    <Line
+                      yAxisId="rsi"
+                      type="monotone"
+                      dataKey="_rsi"
+                      stroke="#f43f5e"
+                      strokeWidth={1.5}
+                      dot={false}
+                      legendType="none"
+                      isAnimationActive={false}
+                      connectNulls
+                      strokeOpacity={0.85}
                     />
                   </LineChart>
                 </ResponsiveContainer>

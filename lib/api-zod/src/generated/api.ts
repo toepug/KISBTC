@@ -152,6 +152,16 @@ export const GetBtcChartResponse = zod.object({
       wma200w: zod.number().nullish(),
       ema20w: zod.number().nullish(),
       sma200d: zod.number().nullish(),
+      wRsi14: zod
+        .number()
+        .nullish()
+        .describe("14-period weekly RSI (forward-filled from weekly to daily)"),
+      heatActive: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "True when any heat index signal (RSI or SMA parabolic) is active on this date",
+        ),
     }),
   ),
   currentZone: zod.enum([
