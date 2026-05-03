@@ -15,8 +15,10 @@ import type {
 
 import type {
   ApiError,
+  BtcBacktestResult,
   BtcChartData,
   BtcDashboard,
+  GetBtcBacktestParams,
   HealthStatus,
 } from "./api.schemas";
 
@@ -173,6 +175,101 @@ export function useGetBtcDashboard<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetBtcDashboardQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Simulates the KISBTC zone-based DCA strategy against historical BTC data
+ * @summary Run strategy backtest
+ */
+export const getGetBtcBacktestUrl = (params: GetBtcBacktestParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/btc/backtest?${stringifiedParams}`
+    : `/api/btc/backtest`;
+};
+
+export const getBtcBacktest = async (
+  params: GetBtcBacktestParams,
+  options?: RequestInit,
+): Promise<BtcBacktestResult> => {
+  return customFetch<BtcBacktestResult>(getGetBtcBacktestUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBtcBacktestQueryKey = (params?: GetBtcBacktestParams) => {
+  return [`/api/btc/backtest`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetBtcBacktestQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBtcBacktest>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetBtcBacktestParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBtcBacktest>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBtcBacktestQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBtcBacktest>>> = ({
+    signal,
+  }) => getBtcBacktest(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBtcBacktest>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBtcBacktestQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBtcBacktest>>
+>;
+export type GetBtcBacktestQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Run strategy backtest
+ */
+
+export function useGetBtcBacktest<
+  TData = Awaited<ReturnType<typeof getBtcBacktest>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetBtcBacktestParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBtcBacktest>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBtcBacktestQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

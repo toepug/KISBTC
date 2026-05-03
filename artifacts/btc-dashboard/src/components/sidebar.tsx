@@ -1,9 +1,10 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, BookOpen, Bitcoin } from "lucide-react";
+import { LayoutDashboard, BookOpen, Bitcoin, FlaskConical } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/strategy", label: "Our Strategy", icon: BookOpen },
+  { href: "/backtest", label: "Backtest", icon: FlaskConical },
 ];
 
 export default function Sidebar() {

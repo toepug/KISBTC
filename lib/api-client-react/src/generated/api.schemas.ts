@@ -55,3 +55,72 @@ export interface BtcChartData {
 export interface ApiError {
   error: string;
 }
+
+export interface BtcBacktestSummary {
+  finalValue: number;
+  totalInvested: number;
+  netProfit: number;
+  returnPct: number;
+  maxDrawdown: number;
+  dcaFinalValue: number;
+  dcaTotalInvested: number;
+  outperformance: number;
+  btcValue: number;
+  cashBalance: number;
+  numContributions: number;
+  numSells: number;
+}
+
+export interface BtcBacktestHistoryPoint {
+  date: string;
+  portfolioValue: number;
+  btcValue: number;
+  cashBalance: number;
+  dcaValue: number;
+  price: number;
+  zone: string;
+}
+
+export interface BtcBacktestTrade {
+  date: string;
+  type: string;
+  zone: string;
+  label: string;
+  price: number;
+  amount: number;
+  btcDelta: number;
+}
+
+export interface BtcBacktestZoneStat {
+  zone: string;
+  label: string;
+  count: number;
+  totalDeployed: number;
+  color: string;
+}
+
+export interface BtcBacktestResult {
+  startDate: string;
+  endDate: string;
+  baseInstallment: number;
+  startingCash: number;
+  summary: BtcBacktestSummary;
+  history: BtcBacktestHistoryPoint[];
+  trades: BtcBacktestTrade[];
+  zoneStats: BtcBacktestZoneStat[];
+}
+
+export type GetBtcBacktestParams = {
+  /**
+   * Simulation start date (YYYY-MM-DD)
+   */
+  startDate: string;
+  /**
+   * Base bi-monthly contribution in USD
+   */
+  baseInstallment?: number;
+  /**
+   * Starting CASH.to balance in USD
+   */
+  startingCash?: number;
+};

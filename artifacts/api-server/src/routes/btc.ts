@@ -198,10 +198,21 @@ const ZONE_ACTIONS: Record<BtcZone, string> = {
     "Contribute $0 — price is 50%+ above 200D SMA. No new buys; manage exits only.",
 };
 
+interface RawBtcData {
+  dailyDates: string[];
+  dailyPrices: number[];
+  sma200dArr: (number | null)[];
+  weeklyDates: string[];
+  ema20wArr: (number | null)[];
+  wma200wArr: (number | null)[];
+  currentPrice: number;
+}
+
 // Cache for 10 minutes
 let cache: {
   dashboard: unknown;
   chart: unknown;
+  raw: RawBtcData;
   timestamp: number;
 } | null = null;
 
@@ -284,11 +295,11 @@ async function fetchBtcData() {
 
       // Build chart: last 2 years of daily data with weekly indicators mapped to daily dates
       const chartWindowDays = 730;
-      const startIdx = Math.max(0, dailyDates.length - chartWindowDays);
+      const chartStartIdx = Math.max(0, dailyDates.length - chartWindowDays);
 
       let lastWeeklyIdx = 0;
-      const points = dailyDates.slice(startIdx).map((date, idx) => {
-        const absIdx = startIdx + idx;
+      const points = dailyDates.slice(chartStartIdx).map((date, idx) => {
+        const absIdx = chartStartIdx + idx;
         while (
           lastWeeklyIdx + 1 < weeklyDates.length &&
           weeklyDates[lastWeeklyIdx + 1] <= date
@@ -306,7 +317,17 @@ async function fetchBtcData() {
 
       const chartResponse = { points, currentZone: zoneResult.zone };
 
-      cache = { dashboard, chart: chartResponse, timestamp: Date.now() };
+      const raw: RawBtcData = {
+        dailyDates,
+        dailyPrices,
+        sma200dArr,
+        weeklyDates,
+        ema20wArr,
+        wma200wArr,
+        currentPrice,
+      };
+
+      cache = { dashboard, chart: chartResponse, raw, timestamp: Date.now() };
       return cache;
     } finally {
       fetchInFlight = null;
@@ -315,6 +336,182 @@ async function fetchBtcData() {
 
   return fetchInFlight;
 }
+
+// ─── Backtest engine ──────────────────────────────────────────────────────────
+
+const ZONE_MULTIPLIERS: Record<BtcZone, number> = {
+  MAX_ACCUMULATION: 2.0,
+  AGGRESSIVE_BUY: 1.5,
+  STANDARD_BUY_LOW: 1.0,
+  STANDARD_BUY_HIGH: 0.6,
+  TAKE_PROFIT: 0.0,
+};
+
+function computeBacktest(
+  raw: RawBtcData,
+  startDate: string,
+  baseInstallment: number,
+  startingCash: number
+) {
+  const { dailyDates, dailyPrices, sma200dArr, weeklyDates, ema20wArr, wma200wArr } = raw;
+
+  // Build per-day weekly indicator values via forward-fill
+  const dailyWma: (number | null)[] = [];
+  const dailyEma: (number | null)[] = [];
+  let wi = 0;
+  for (let i = 0; i < dailyDates.length; i++) {
+    while (wi + 1 < weeklyDates.length && weeklyDates[wi + 1] <= dailyDates[i]) wi++;
+    dailyWma.push(wma200wArr[wi] ?? null);
+    dailyEma.push(ema20wArr[wi] ?? null);
+  }
+
+  // Snap start date to the first available date >= requested
+  let startIdx = dailyDates.findIndex((d) => d >= startDate);
+  if (startIdx === -1) startIdx = 0;
+
+  const DAILY_RATE = 0.04 / 365;
+  let btcHoldings = 0;
+  let cashBalance = startingCash;
+  let totalInvested = 0;
+  let tp1 = false, tp2 = false, tp3 = false;
+  let dcaBtc = 0, dcaInvested = 0;
+  let peakValue = startingCash;
+
+  const history: Array<{
+    date: string; portfolioValue: number; btcValue: number;
+    cashBalance: number; dcaValue: number; price: number; zone: string;
+  }> = [];
+  const trades: Array<{
+    date: string; type: string; zone: string; label: string;
+    price: number; amount: number; btcDelta: number;
+  }> = [];
+  const zoneMap: Record<string, { count: number; totalDeployed: number }> = {};
+
+  let maxDrawdownPct = 0;
+
+  for (let i = startIdx; i < dailyDates.length; i++) {
+    const date = dailyDates[i];
+    const price = dailyPrices[i];
+    const sma200d = sma200dArr[i];
+    const wma200w = dailyWma[i];
+    const ema20w = dailyEma[i];
+    if (sma200d === null || wma200w === null || ema20w === null) continue;
+
+    // Daily interest on CASH.to balance
+    cashBalance *= 1 + DAILY_RATE;
+
+    const zoneResult = determineZone(price, wma200w, ema20w, sma200d);
+    const zone = zoneResult.zone;
+
+    // Take-profit: check TP3 → TP2 → TP1 in order (highest first, one event per day)
+    const tpChecks: [boolean, string, string, number][] = [
+      [tp3, "tp3", "TP3 +100%", 2.0],
+      [tp2, "tp2", "TP2 +80%",  1.8],
+      [tp1, "tp1", "TP1 +50%",  1.5],
+    ];
+    for (const [triggered, key, label, mult] of tpChecks) {
+      if (!triggered && price >= sma200d * mult && btcHoldings > 0) {
+        const sellBtc = btcHoldings * 0.20;
+        const proceeds = sellBtc * price;
+        btcHoldings -= sellBtc;
+        cashBalance += proceeds;
+        if (key === "tp1") tp1 = true;
+        else if (key === "tp2") tp2 = true;
+        else tp3 = true;
+        trades.push({ date, type: "SELL", zone, label, price, amount: proceeds, btcDelta: -sellBtc });
+        break;
+      }
+    }
+
+    // Bi-monthly contribution on 1st and 15th
+    const dom = parseInt(date.split("-")[2], 10);
+    if (dom === 1 || dom === 15) {
+      const multiplier = ZONE_MULTIPLIERS[zone];
+      const contribution = baseInstallment * multiplier;
+      if (contribution > 0) {
+        const btcBought = contribution / price;
+        btcHoldings += btcBought;
+        totalInvested += contribution;
+        trades.push({ date, type: "BUY", zone, label: ZONE_LABELS[zone], price, amount: contribution, btcDelta: btcBought });
+        if (!zoneMap[zone]) zoneMap[zone] = { count: 0, totalDeployed: 0 };
+        zoneMap[zone].count++;
+        zoneMap[zone].totalDeployed += contribution;
+      }
+      // Simple DCA benchmark
+      dcaBtc += baseInstallment / price;
+      dcaInvested += baseInstallment;
+    }
+
+    const btcValue = btcHoldings * price;
+    const portfolioValue = btcValue + cashBalance;
+    const dcaValue = dcaBtc * price + startingCash;
+
+    if (portfolioValue > peakValue) peakValue = portfolioValue;
+    const dd = peakValue > 0 ? ((portfolioValue - peakValue) / peakValue) * 100 : 0;
+    if (dd < maxDrawdownPct) maxDrawdownPct = dd;
+
+    history.push({ date, portfolioValue, btcValue, cashBalance, dcaValue, price, zone });
+  }
+
+  const last = history.at(-1);
+  const finalValue = last?.portfolioValue ?? startingCash;
+  const btcValueFinal = last?.btcValue ?? 0;
+  const cashFinal = last?.cashBalance ?? startingCash;
+  const dcaFinalValue = last?.dcaValue ?? startingCash;
+  const netProfit = finalValue - totalInvested - startingCash;
+  const returnPct = (totalInvested + startingCash) > 0
+    ? (netProfit / (totalInvested + startingCash)) * 100 : 0;
+
+  const zoneStats = Object.entries(zoneMap).map(([z, s]) => ({
+    zone: z,
+    label: ZONE_LABELS[z as BtcZone] ?? z,
+    count: s.count,
+    totalDeployed: s.totalDeployed,
+    color: ZONE_COLORS[z as BtcZone] ?? "#94a3b8",
+  }));
+
+  return {
+    startDate: dailyDates[startIdx] ?? startDate,
+    endDate: dailyDates.at(-1) ?? startDate,
+    baseInstallment,
+    startingCash,
+    summary: {
+      finalValue,
+      totalInvested,
+      netProfit,
+      returnPct,
+      maxDrawdown: maxDrawdownPct,
+      dcaFinalValue,
+      dcaTotalInvested: dcaInvested,
+      outperformance: finalValue - dcaFinalValue,
+      btcValue: btcValueFinal,
+      cashBalance: cashFinal,
+      numContributions: trades.filter((t) => t.type === "BUY").length,
+      numSells: trades.filter((t) => t.type === "SELL").length,
+    },
+    history,
+    trades,
+    zoneStats,
+  };
+}
+
+router.get("/btc/backtest", async (req: Request, res: Response) => {
+  try {
+    const data = await fetchBtcData();
+    const startDate = typeof req.query.startDate === "string" ? req.query.startDate : "";
+    const baseInstallment = Math.max(1, parseFloat(req.query.baseInstallment as string) || 500);
+    const startingCash = Math.max(0, parseFloat(req.query.startingCash as string) || 0);
+    if (!startDate) {
+      res.status(400).json({ error: "startDate query parameter is required (YYYY-MM-DD)" });
+      return;
+    }
+    const result = computeBacktest(data!.raw, startDate, baseInstallment, startingCash);
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Failed to run backtest");
+    res.status(500).json({ error: "Backtest failed. Please try again." });
+  }
+});
 
 router.get("/btc/dashboard", async (req: Request, res: Response) => {
   try {

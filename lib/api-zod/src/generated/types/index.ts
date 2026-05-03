@@ -7,8 +7,14 @@
  */
 
 export * from "./apiError";
+export * from "./btcBacktestHistoryPoint";
+export * from "./btcBacktestResult";
+export * from "./btcBacktestSummary";
+export * from "./btcBacktestTrade";
+export * from "./btcBacktestZoneStat";
 export * from "./btcChartData";
 export * from "./btcChartPoint";
 export * from "./btcDashboard";
 export * from "./btcZone";
+export * from "./getBtcBacktestParams";
 export * from "./healthStatus";

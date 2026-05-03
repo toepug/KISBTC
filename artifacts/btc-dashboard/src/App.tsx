@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Sidebar from "@/components/sidebar";
 import Dashboard from "@/pages/dashboard";
 import Strategy from "@/pages/strategy";
+import Backtest from "@/pages/backtest";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -18,6 +19,7 @@ function Router() {
         <Switch>
           <Route path="/" component={Dashboard} />
           <Route path="/strategy" component={Strategy} />
+          <Route path="/backtest" component={Backtest} />
           <Route component={NotFound} />
         </Switch>
       </main>

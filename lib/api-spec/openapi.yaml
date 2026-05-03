@@ -45,6 +45,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /btc/backtest:
+    get:
+      operationId: getBtcBacktest
+      tags: [btc]
+      summary: Run strategy backtest
+      description: Simulates the KISBTC zone-based DCA strategy against historical BTC data
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Simulation start date (YYYY-MM-DD)
+        - name: baseInstallment
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 500
+          description: Base bi-monthly contribution in USD
+        - name: startingCash
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 0
+          description: Starting CASH.to balance in USD
+      responses:
+        "200":
+          description: Backtest result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BtcBacktestResult"
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: Backtest error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /btc/chart:
     get:
       operationId: getBtcChart
@@ -161,3 +208,111 @@ components:
           type: string
       required:
         - error
+    BtcBacktestSummary:
+      type: object
+      properties:
+        finalValue: { type: number }
+        totalInvested: { type: number }
+        netProfit: { type: number }
+        returnPct: { type: number }
+        maxDrawdown: { type: number }
+        dcaFinalValue: { type: number }
+        dcaTotalInvested: { type: number }
+        outperformance: { type: number }
+        btcValue: { type: number }
+        cashBalance: { type: number }
+        numContributions: { type: number }
+        numSells: { type: number }
+      required:
+        - finalValue
+        - totalInvested
+        - netProfit
+        - returnPct
+        - maxDrawdown
+        - dcaFinalValue
+        - dcaTotalInvested
+        - outperformance
+        - btcValue
+        - cashBalance
+        - numContributions
+        - numSells
+    BtcBacktestHistoryPoint:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        portfolioValue: { type: number }
+        btcValue: { type: number }
+        cashBalance: { type: number }
+        dcaValue: { type: number }
+        price: { type: number }
+        zone: { type: string }
+      required:
+        - date
+        - portfolioValue
+        - btcValue
+        - cashBalance
+        - dcaValue
+        - price
+        - zone
+    BtcBacktestTrade:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        type: { type: string }
+        zone: { type: string }
+        label: { type: string }
+        price: { type: number }
+        amount: { type: number }
+        btcDelta: { type: number }
+      required:
+        - date
+        - type
+        - zone
+        - label
+        - price
+        - amount
+        - btcDelta
+    BtcBacktestZoneStat:
+      type: object
+      properties:
+        zone: { type: string }
+        label: { type: string }
+        count: { type: number }
+        totalDeployed: { type: number }
+        color: { type: string }
+      required:
+        - zone
+        - label
+        - count
+        - totalDeployed
+        - color
+    BtcBacktestResult:
+      type: object
+      properties:
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        baseInstallment: { type: number }
+        startingCash: { type: number }
+        summary:
+          $ref: "#/components/schemas/BtcBacktestSummary"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/BtcBacktestHistoryPoint"
+        trades:
+          type: array
+          items:
+            $ref: "#/components/schemas/BtcBacktestTrade"
+        zoneStats:
+          type: array
+          items:
+            $ref: "#/components/schemas/BtcBacktestZoneStat"
+      required:
+        - startDate
+        - endDate
+        - baseInstallment
+        - startingCash
+        - summary
+        - history
+        - trades
+        - zoneStats

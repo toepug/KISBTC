@@ -38,6 +38,77 @@ export const GetBtcDashboardResponse = zod.object({
 });
 
 /**
+ * Simulates the KISBTC zone-based DCA strategy against historical BTC data
+ * @summary Run strategy backtest
+ */
+export const getBtcBacktestQueryBaseInstallmentDefault = 500;
+export const getBtcBacktestQueryStartingCashDefault = 0;
+
+export const GetBtcBacktestQueryParams = zod.object({
+  startDate: zod.date().describe("Simulation start date (YYYY-MM-DD)"),
+  baseInstallment: zod.coerce
+    .number()
+    .default(getBtcBacktestQueryBaseInstallmentDefault)
+    .describe("Base bi-monthly contribution in USD"),
+  startingCash: zod.coerce
+    .number()
+    .default(getBtcBacktestQueryStartingCashDefault)
+    .describe("Starting CASH.to balance in USD"),
+});
+
+export const GetBtcBacktestResponse = zod.object({
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  baseInstallment: zod.number(),
+  startingCash: zod.number(),
+  summary: zod.object({
+    finalValue: zod.number(),
+    totalInvested: zod.number(),
+    netProfit: zod.number(),
+    returnPct: zod.number(),
+    maxDrawdown: zod.number(),
+    dcaFinalValue: zod.number(),
+    dcaTotalInvested: zod.number(),
+    outperformance: zod.number(),
+    btcValue: zod.number(),
+    cashBalance: zod.number(),
+    numContributions: zod.number(),
+    numSells: zod.number(),
+  }),
+  history: zod.array(
+    zod.object({
+      date: zod.coerce.date(),
+      portfolioValue: zod.number(),
+      btcValue: zod.number(),
+      cashBalance: zod.number(),
+      dcaValue: zod.number(),
+      price: zod.number(),
+      zone: zod.string(),
+    }),
+  ),
+  trades: zod.array(
+    zod.object({
+      date: zod.coerce.date(),
+      type: zod.string(),
+      zone: zod.string(),
+      label: zod.string(),
+      price: zod.number(),
+      amount: zod.number(),
+      btcDelta: zod.number(),
+    }),
+  ),
+  zoneStats: zod.array(
+    zod.object({
+      zone: zod.string(),
+      label: zod.string(),
+      count: zod.number(),
+      totalDeployed: zod.number(),
+      color: zod.string(),
+    }),
+  ),
+});
+
+/**
  * Returns historical BTC price with overlaid moving averages for charting
  * @summary Get BTC chart data
  */
