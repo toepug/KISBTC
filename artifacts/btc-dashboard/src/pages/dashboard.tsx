@@ -60,14 +60,22 @@ function PctBadge({ pct }: { pct: number }) {
   );
 }
 
+const TP_TOOLTIP_LABELS: Record<string, string> = {
+  _tp50: "TP1 +50%",
+  _tp80: "TP2 +80%",
+  _tp100: "TP3 +100%",
+};
+
 function CustomTooltip({ active, payload, label }: any) {
   if (active && payload && payload.length) {
+    const mainEntries = payload.filter((e: any) => !String(e.dataKey).startsWith("_tp"));
+    const tpEntries = payload.filter((e: any) => String(e.dataKey).startsWith("_tp"));
     return (
-      <div className="bg-card border border-border p-3 rounded-md shadow-lg min-w-[180px]">
+      <div className="bg-card border border-border p-3 rounded-md shadow-lg min-w-[210px]">
         <p className="text-xs text-muted-foreground mb-2 font-mono">
           {label ? format(new Date(label + "T00:00:00"), "MMM d, yyyy") : ""}
         </p>
-        {payload.map((entry: any, index: number) => (
+        {mainEntries.map((entry: any, index: number) => (
           <div key={index} className="flex items-center justify-between gap-4 text-xs font-medium py-0.5">
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
@@ -76,6 +84,26 @@ function CustomTooltip({ active, payload, label }: any) {
             <span className="text-foreground font-mono">{formatUsd(entry.value)}</span>
           </div>
         ))}
+        {tpEntries.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-border/50">
+            <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+              Take Profit — this date
+            </p>
+            {tpEntries.map((entry: any) => (
+              <div key={entry.dataKey} className="flex items-center justify-between gap-4 text-xs font-medium py-0.5">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-sm shrink-0 opacity-80" style={{ backgroundColor: entry.color }} />
+                  <span className="text-muted-foreground">
+                    {TP_TOOLTIP_LABELS[entry.dataKey] ?? entry.dataKey}
+                  </span>
+                </div>
+                <span className="font-mono" style={{ color: entry.color }}>
+                  {formatUsd(entry.value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -150,15 +178,19 @@ export default function Dashboard() {
     : chartDataMax * 1.04;
   const chartYMin = chartDataMin * 0.96;
 
-  // Inject constant TP fields onto every chart point so Line components can render them.
+  // Inject dynamic TP fields per chart point, computed from each point's own 200D SMA.
+  // This makes TP lines curve with historical SMA rather than being flat constants.
   // Always inject (undefined when hidden) so Recharts never deals with dynamic Line children.
   const rawPoints: Record<string, unknown>[] = (chartData as any)?.points ?? [];
-  const chartPoints = rawPoints.map((p) => ({
-    ...p,
-    _tp50:  showTpLines && tpSma > 0 ? tp50  : undefined,
-    _tp80:  showTpLines && tpSma > 0 ? tp80  : undefined,
-    _tp100: showTpLines && tpSma > 0 ? tp100 : undefined,
-  }));
+  const chartPoints = rawPoints.map((p) => {
+    const ptSma = p.sma200d as number | null | undefined;
+    return {
+      ...p,
+      _tp50:  showTpLines && ptSma != null ? ptSma * 1.5 : undefined,
+      _tp80:  showTpLines && ptSma != null ? ptSma * 1.8 : undefined,
+      _tp100: showTpLines && ptSma != null ? ptSma * 2.0 : undefined,
+    };
+  });
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-5">
@@ -554,6 +586,35 @@ export default function Dashboard() {
                         label={{ value: "Now", position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                       />
                     )}
+                    {/* Current Target reference lines — today's TP levels as flat horizontal markers */}
+                    {showTpLines && tpSma > 0 && (
+                      <>
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={tp50}
+                          stroke="#f97316"
+                          strokeOpacity={0.45}
+                          strokeDasharray="2 6"
+                          label={{ value: `TP1 Target ${fmtTpLabel(tp50)}`, position: "insideTopRight", fontSize: 9, fill: "#f97316" }}
+                        />
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={tp80}
+                          stroke="#ef4444"
+                          strokeOpacity={0.45}
+                          strokeDasharray="2 6"
+                          label={{ value: `TP2 Target ${fmtTpLabel(tp80)}`, position: "insideTopRight", fontSize: 9, fill: "#ef4444" }}
+                        />
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={tp100}
+                          stroke="#dc2626"
+                          strokeOpacity={0.45}
+                          strokeDasharray="2 6"
+                          label={{ value: `TP3 Target ${fmtTpLabel(tp100)}`, position: "insideTopRight", fontSize: 9, fill: "#dc2626" }}
+                        />
+                      </>
+                    )}
                     <Line
                       yAxisId="price"
                       type="monotone"
@@ -611,7 +672,7 @@ export default function Dashboard() {
                   <span className="text-xs font-semibold text-[#dc2626]">TP3 +100%</span>
                   <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp100)}</span>
                 </div>
-                <span className="text-xs text-muted-foreground ml-auto self-center">Based on 200D SMA × 1.5 / 1.8 / 2.0</span>
+                <span className="text-xs text-muted-foreground ml-auto self-center">Current Targets · hover chart for historical levels</span>
               </div>
             )}
           </CardContent>
