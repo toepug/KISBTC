@@ -61,6 +61,7 @@ function PctBadge({ pct }: { pct: number }) {
 }
 
 const TP_TOOLTIP_LABELS: Record<string, string> = {
+  _sma115: "SMA × 1.15",
   _tp20: "TP1 +20%",
   _tp35: "TP2 +35%",
 };
@@ -175,12 +176,13 @@ export default function Dashboard() {
     : chartDataMax * 1.04;
   const chartYMin = chartDataMin * 0.96;
 
-  // Inject dynamic TP fields per point (computed from each point's own 200D SMA)
+  // Inject dynamic TP and zone boundary fields per point (computed from each point's own 200D SMA)
   const rawPoints: Record<string, unknown>[] = (chartData as any)?.points ?? [];
   const chartPoints = rawPoints.map((p) => {
     const ptSma = p.sma200d as number | null | undefined;
     return {
       ...p,
+      _sma115: ptSma != null ? ptSma * 1.15 : undefined,
       _tp20: showTpLines && ptSma != null ? ptSma * 1.20 : undefined,
       _tp35: showTpLines && ptSma != null ? ptSma * 1.35 : undefined,
     };
@@ -519,6 +521,7 @@ export default function Dashboard() {
                         { value: "200W WMA",   type: "circle", id: "wma200w", color: "#ef4444" },
                         { value: "20W EMA",    type: "circle", id: "ema20w",  color: "#3b82f6" },
                         { value: "200D SMA",   type: "circle", id: "sma200d", color: "#eab308" },
+                        { value: "SMA × 1.15", type: "circle", id: "_sma115", color: "#c084fc" },
                       ]}
                     />
                     <Line
@@ -593,6 +596,19 @@ export default function Dashboard() {
                         />
                       </>
                     )}
+                    {/* SMA × 1.15 — upper boundary of Standard Buy High zone */}
+                    <Line
+                      yAxisId="price"
+                      type="monotone"
+                      dataKey="_sma115"
+                      name="SMA × 1.15"
+                      stroke="#c084fc"
+                      strokeWidth={1.5}
+                      strokeDasharray="5 3"
+                      dot={false}
+                      isAnimationActive={false}
+                      connectNulls={false}
+                    />
                     {/* Dynamic TP lines curved with historical SMA */}
                     <Line
                       yAxisId="price"
