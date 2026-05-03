@@ -24,6 +24,7 @@ export const GetBtcDashboardResponse = zod.object({
   wma200w: zod.number().describe("200-Week Weighted Moving Average"),
   ema20w: zod.number().describe("20-Week Exponential Moving Average"),
   sma200d: zod.number().describe("200-Day Simple Moving Average"),
+  wRsi14: zod.number().describe("Current 14-period weekly RSI"),
   zone: zod.enum([
     "MAX_ACCUMULATION",
     "AGGRESSIVE_BUY",
@@ -39,6 +40,32 @@ export const GetBtcDashboardResponse = zod.object({
     .describe(
       "True when price is >25% above 200D SMA and aggressive accumulation is suspended",
     ),
+  heatSignals: zod.object({
+    rsi: zod.object({
+      active: zod.boolean(),
+      value: zod.number().describe("Current weekly RSI-14 value"),
+      description: zod.string(),
+    }),
+    smaParabolic: zod.object({
+      active: zod.boolean(),
+      acceleration: zod
+        .number()
+        .describe("SMA 2nd-derivative value (USD per 20-day period)"),
+      description: zod.string(),
+    }),
+    trailingStop: zod.object({
+      armed: zod.boolean().describe("True when price is >40% above 200D SMA"),
+      triggered: zod
+        .boolean()
+        .describe("True when armed and price drops 10% from 20-day peak"),
+      localPeak: zod.number().describe("Highest price in the last 20 days"),
+      drawdownPct: zod
+        .number()
+        .describe("Percentage drop from local peak (negative = drawdown)"),
+      description: zod.string(),
+    }),
+    anyTriggered: zod.boolean().describe("True if any heat signal is active"),
+  }),
   lastUpdated: zod.coerce.date().describe("Timestamp of the last data fetch"),
 });
 

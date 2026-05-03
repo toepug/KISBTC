@@ -12,7 +12,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { Activity, Clock, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Minus, Eye, EyeOff } from "lucide-react";
+import { Activity, Clock, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Minus, Eye, EyeOff, Flame, ShieldCheck, ShieldAlert } from "lucide-react";
 import {
   useGetBtcDashboard,
   useGetBtcChart,
@@ -461,6 +461,133 @@ export default function Dashboard() {
                     &lt;0%: Standard Buy Low &nbsp;·&nbsp; 25–50%: High &nbsp;·&nbsp; ≥50%: Take Profit
                   </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {/* Heat Index */}
+      {dash && (
+        <section>
+          <Card className={`border ${dash.heatSignals?.anyTriggered ? "border-red-500/50 bg-red-950/10" : "bg-card border-border"}`}>
+            <CardHeader className="p-4 border-b border-border flex flex-row items-center gap-2">
+              <Flame className={`w-5 h-5 shrink-0 ${dash.heatSignals?.anyTriggered ? "text-red-400" : "text-muted-foreground"}`} />
+              <div className="flex-1 min-w-0">
+                <CardTitle className="text-base flex items-center gap-2">
+                  Heat Index
+                  {dash.heatSignals?.anyTriggered ? (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                      SELL SIGNAL ACTIVE
+                    </span>
+                  ) : (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground border border-border">
+                      ALL CLEAR
+                    </span>
+                  )}
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Extended sell signals independent of price or SMA levels
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+
+                {/* RSI Signal */}
+                {(() => {
+                  const sig = dash.heatSignals?.rsi;
+                  const active = sig?.active ?? false;
+                  return (
+                    <div className={`rounded-lg p-3 border ${active ? "border-red-500/50 bg-red-950/20" : "border-border bg-muted/20"}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+                          Weekly RSI Cap
+                        </div>
+                        <div className={`flex items-center gap-1 text-xs font-bold ${active ? "text-red-400" : "text-emerald-400"}`}>
+                          {active ? <ShieldAlert className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                          {active ? "TRIGGERED" : "CLEAR"}
+                        </div>
+                      </div>
+                      <div className={`text-2xl font-mono font-bold mb-1 ${active ? "text-red-400" : "text-foreground"}`}>
+                        {sig?.value != null ? sig.value.toFixed(1) : "—"}
+                      </div>
+                      <div className="text-xs text-muted-foreground mb-2">Weekly RSI-14 · threshold 80</div>
+                      <div className={`w-full h-1.5 rounded-full bg-muted overflow-hidden`}>
+                        <div
+                          className={`h-full rounded-full transition-all ${(sig?.value ?? 0) > 80 ? "bg-red-500" : (sig?.value ?? 0) > 65 ? "bg-yellow-500" : "bg-emerald-500"}`}
+                          style={{ width: `${Math.min(100, ((sig?.value ?? 0) / 100) * 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-muted-foreground/60 mt-1">
+                        <span>0</span><span className="text-yellow-500/70">65</span><span className="text-red-500/70">80</span><span>100</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground/80 mt-2 leading-relaxed">{sig?.description}</p>
+                    </div>
+                  );
+                })()}
+
+                {/* SMA Parabolic Signal */}
+                {(() => {
+                  const sig = dash.heatSignals?.smaParabolic;
+                  const active = sig?.active ?? false;
+                  const acc = sig?.acceleration ?? 0;
+                  return (
+                    <div className={`rounded-lg p-3 border ${active ? "border-red-500/50 bg-red-950/20" : "border-border bg-muted/20"}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+                          SMA Deceleration
+                        </div>
+                        <div className={`flex items-center gap-1 text-xs font-bold ${active ? "text-red-400" : "text-emerald-400"}`}>
+                          {active ? <ShieldAlert className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                          {active ? "TRIGGERED" : "CLEAR"}
+                        </div>
+                      </div>
+                      <div className={`text-2xl font-mono font-bold mb-1 ${active ? "text-red-400" : acc > 0 ? "text-yellow-400" : "text-foreground"}`}>
+                        {acc > 0 ? "+" : ""}{acc != null ? `$${Math.abs(acc).toFixed(0)}` : "—"}<span className="text-sm font-normal text-muted-foreground">/20d</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mb-2">200D SMA acceleration · triggers at &gt;30% above SMA</div>
+                      <div className="text-xs text-muted-foreground/80 mt-2 leading-relaxed">{sig?.description}</div>
+                    </div>
+                  );
+                })()}
+
+                {/* Trailing Stop Signal */}
+                {(() => {
+                  const sig = dash.heatSignals?.trailingStop;
+                  const triggered = sig?.triggered ?? false;
+                  const armed = sig?.armed ?? false;
+                  const drawdown = sig?.drawdownPct ?? 0;
+                  return (
+                    <div className={`rounded-lg p-3 border ${triggered ? "border-red-500/50 bg-red-950/20" : armed ? "border-yellow-500/40 bg-yellow-950/10" : "border-border bg-muted/20"}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+                          Trailing TP
+                        </div>
+                        <div className={`flex items-center gap-1 text-xs font-bold ${triggered ? "text-red-400" : armed ? "text-yellow-400" : "text-emerald-400"}`}>
+                          {triggered ? <ShieldAlert className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                          {triggered ? "TRIGGERED" : armed ? "ARMED" : "INACTIVE"}
+                        </div>
+                      </div>
+                      <div className={`text-2xl font-mono font-bold mb-1 ${triggered ? "text-red-400" : armed ? "text-yellow-400" : "text-muted-foreground"}`}>
+                        {armed ? `${drawdown.toFixed(1)}%` : "—"}
+                        <span className="text-sm font-normal text-muted-foreground ml-1">
+                          {armed ? "from peak" : ""}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mb-2">
+                        Arms &gt;40% above SMA · triggers at −10% drawdown from 20d peak
+                      </div>
+                      {armed && sig?.localPeak && (
+                        <div className="text-xs text-muted-foreground/80 mb-1 font-mono">
+                          20d peak: {formatUsd(sig.localPeak)}
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground/80 leading-relaxed">{sig?.description}</p>
+                    </div>
+                  );
+                })()}
+
               </div>
             </CardContent>
           </Card>

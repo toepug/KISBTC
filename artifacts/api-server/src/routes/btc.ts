@@ -113,6 +113,41 @@ function calcWMA(prices: number[], period: number): (number | null)[] {
   });
 }
 
+// Wilder's smoothed RSI
+function calcRSI(prices: number[], period: number): (number | null)[] {
+  const result: (number | null)[] = new Array(prices.length).fill(null);
+  if (prices.length < period + 1) return result;
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) avgGain += change; else avgLoss += -change;
+  }
+  avgGain /= period;
+  avgLoss /= period;
+  result[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  for (let i = period + 1; i < prices.length; i++) {
+    const change = prices[i] - prices[i - 1];
+    const gain = change > 0 ? change : 0;
+    const loss = change < 0 ? -change : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+    result[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+  return result;
+}
+
+// Second derivative of SMA: measures whether the SMA is accelerating upward (parabolic move)
+// Returns (RoC_now - RoC_lag) where RoC = sma[i] - sma[i - rocPeriod]
+function calcSmaAcceleration(smaArr: (number | null)[], rocPeriod = 20): (number | null)[] {
+  const result: (number | null)[] = new Array(smaArr.length).fill(null);
+  for (let i = rocPeriod * 2; i < smaArr.length; i++) {
+    const s0 = smaArr[i], s1 = smaArr[i - rocPeriod], s2 = smaArr[i - rocPeriod * 2];
+    if (s0 == null || s1 == null || s2 == null) continue;
+    result[i] = (s0 - s1) - (s1 - s2);
+  }
+  return result;
+}
+
 type BtcZone =
   | "MAX_ACCUMULATION"
   | "AGGRESSIVE_BUY"
@@ -232,7 +267,9 @@ interface RawBtcData {
   dailyDates: string[];
   dailyPrices: number[];
   sma200dArr: (number | null)[];
+  smaAccArr: (number | null)[];
   weeklyDates: string[];
+  weeklyRsi14Arr: (number | null)[];
   ema20wArr: (number | null)[];
   wma200wArr: (number | null)[];
   currentPrice: number;
@@ -285,30 +322,102 @@ async function fetchBtcData() {
 
       // Calculate indicators
       const sma200dArr = calcSMA(dailyPrices, 200);
+      const smaAccArr = calcSmaAcceleration(sma200dArr);
       const ema20wArr = calcEMA(weeklyPrices, 20);
       const wma200wArr = calcWMA(weeklyPrices, 200);
+      const weeklyRsi14Arr = calcRSI(weeklyPrices, 14);
 
       const latestSma200d = sma200dArr.filter((v) => v !== null).at(-1) as number;
       const latestEma20w = ema20wArr.filter((v) => v !== null).at(-1) as number;
       const latestWma200w = wma200wArr.filter((v) => v !== null).at(-1) as number;
-
-      const zoneResult = determineZone(
-        currentPrice,
-        latestWma200w,
-        latestEma20w,
-        latestSma200d
-      );
+      const latestSmaAcc = smaAccArr.filter((v) => v !== null).at(-1) as number ?? 0;
+      const latestWRsi14 = weeklyRsi14Arr.filter((v) => v !== null).at(-1) as number ?? 50;
 
       // Percentage distances from each indicator
       const pctFromWma200w = ((currentPrice - latestWma200w) / latestWma200w) * 100;
       const pctFromEma20w = ((currentPrice - latestEma20w) / latestEma20w) * 100;
       const pctFromSma200d = ((currentPrice - latestSma200d) / latestSma200d) * 100;
 
+      // ── Heat Index signals ────────────────────────────────────────────────
+      // Signal 1: Weekly RSI > 80 = market exhaustion
+      const rsiActive = latestWRsi14 > 80;
+
+      // Signal 2: SMA parabolic — price >30% above SMA AND SMA acceleration is positive
+      // Threshold: SMA accelerating by >0.3% of its own value per 20-day period
+      const smaAccThreshold = latestSma200d * 0.003;
+      const smaParabolicActive = pctFromSma200d > 30 && latestSmaAcc > smaAccThreshold;
+
+      // Signal 3: Trailing stop — arms when price >40% above SMA; triggers if 10% drawdown from 20-day peak
+      const trailWindow = 20;
+      const recentPrices = dailyPrices.slice(Math.max(0, dailyPrices.length - trailWindow));
+      const localPeak = recentPrices.length > 0 ? Math.max(...recentPrices) : currentPrice;
+      const trailArmed = pctFromSma200d > 40;
+      const drawdownPct = localPeak > 0 ? ((currentPrice - localPeak) / localPeak) * 100 : 0;
+      const trailTriggered = trailArmed && drawdownPct <= -10;
+
+      const anyTriggered = rsiActive || smaParabolicActive || trailTriggered;
+
+      const heatSignals = {
+        rsi: {
+          active: rsiActive,
+          value: parseFloat(latestWRsi14.toFixed(2)),
+          description: rsiActive
+            ? `Weekly RSI ${latestWRsi14.toFixed(1)} > 80 — market exhaustion, reduce exposure`
+            : `Weekly RSI ${latestWRsi14.toFixed(1)} — below exhaustion threshold (80)`,
+        },
+        smaParabolic: {
+          active: smaParabolicActive,
+          acceleration: parseFloat(latestSmaAcc.toFixed(2)),
+          description: smaParabolicActive
+            ? `SMA accelerating +$${latestSmaAcc.toFixed(0)} per 20d with price ${pctFromSma200d.toFixed(1)}% above SMA — parabolic extension`
+            : `SMA acceleration $${latestSmaAcc > 0 ? "+" : ""}${latestSmaAcc.toFixed(0)}/20d — not parabolic${pctFromSma200d <= 30 ? ` (need price >30% above SMA, currently ${pctFromSma200d.toFixed(1)}%)` : ""}`,
+        },
+        trailingStop: {
+          armed: trailArmed,
+          triggered: trailTriggered,
+          localPeak: parseFloat(localPeak.toFixed(2)),
+          drawdownPct: parseFloat(drawdownPct.toFixed(2)),
+          description: trailTriggered
+            ? `Trailing stop triggered — price dropped ${drawdownPct.toFixed(1)}% from 20-day peak ($${localPeak.toLocaleString("en-US", { maximumFractionDigits: 0 })})`
+            : trailArmed
+            ? `Armed — price >40% above SMA. 20-day peak: $${localPeak.toLocaleString("en-US", { maximumFractionDigits: 0 })}. Drawdown: ${drawdownPct.toFixed(1)}% (trigger at −10%)`
+            : `Inactive — price must be >40% above 200D SMA to arm (currently ${pctFromSma200d.toFixed(1)}%)`,
+        },
+        anyTriggered,
+      };
+
+      // ── Zone determination (heat signals can override to TAKE_PROFIT) ─────
+      let zoneResult = determineZone(currentPrice, latestWma200w, latestEma20w, latestSma200d);
+
+      if (rsiActive) {
+        zoneResult = {
+          zone: "TAKE_PROFIT",
+          triggerIndicator: "Heat Index · RSI",
+          triggerDetail: `Weekly RSI ${latestWRsi14.toFixed(1)} > 80 — market exhaustion`,
+          safetyOverride: false,
+        };
+      } else if (smaParabolicActive) {
+        zoneResult = {
+          zone: "TAKE_PROFIT",
+          triggerIndicator: "Heat Index · SMA",
+          triggerDetail: `SMA parabolic (+$${latestSmaAcc.toFixed(0)}/20d) with price ${pctFromSma200d.toFixed(1)}% above 200D SMA`,
+          safetyOverride: false,
+        };
+      } else if (trailTriggered) {
+        zoneResult = {
+          zone: "TAKE_PROFIT",
+          triggerIndicator: "Heat Index · Trailing Stop",
+          triggerDetail: `Price dropped ${drawdownPct.toFixed(1)}% from 20-day peak ($${localPeak.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+          safetyOverride: false,
+        };
+      }
+
       const dashboard = {
         currentPrice,
         wma200w: latestWma200w,
         ema20w: latestEma20w,
         sma200d: latestSma200d,
+        wRsi14: parseFloat(latestWRsi14.toFixed(2)),
         zone: zoneResult.zone,
         zoneLabel: ZONE_LABELS[zoneResult.zone],
         zoneColor: ZONE_COLORS[zoneResult.zone],
@@ -316,6 +425,7 @@ async function fetchBtcData() {
         triggerIndicator: zoneResult.triggerIndicator,
         triggerDetail: zoneResult.triggerDetail,
         safetyOverride: zoneResult.safetyOverride,
+        heatSignals,
         pctFromWma200w: parseFloat(pctFromWma200w.toFixed(2)),
         pctFromEma20w: parseFloat(pctFromEma20w.toFixed(2)),
         pctFromSma200d: parseFloat(pctFromSma200d.toFixed(2)),
@@ -352,7 +462,9 @@ async function fetchBtcData() {
         dailyDates,
         dailyPrices,
         sma200dArr,
+        smaAccArr,
         weeklyDates,
+        weeklyRsi14Arr,
         ema20wArr,
         wma200wArr,
         currentPrice,
@@ -384,16 +496,18 @@ function computeBacktest(
   baseInstallment: number,
   startingCash: number
 ) {
-  const { dailyDates, dailyPrices, sma200dArr, weeklyDates, ema20wArr, wma200wArr } = raw;
+  const { dailyDates, dailyPrices, sma200dArr, smaAccArr, weeklyDates, weeklyRsi14Arr, ema20wArr, wma200wArr } = raw;
 
   // Build per-day weekly indicator values via forward-fill
   const dailyWma: (number | null)[] = [];
   const dailyEma: (number | null)[] = [];
+  const dailyRsi14: (number | null)[] = [];
   let wi = 0;
   for (let i = 0; i < dailyDates.length; i++) {
     while (wi + 1 < weeklyDates.length && weeklyDates[wi + 1] <= dailyDates[i]) wi++;
     dailyWma.push(wma200wArr[wi] ?? null);
     dailyEma.push(ema20wArr[wi] ?? null);
+    dailyRsi14.push(weeklyRsi14Arr[wi] ?? null);
   }
 
   // Snap start date to the first available date >= requested
@@ -407,6 +521,10 @@ function computeBacktest(
   let tp1 = false, tp2 = false, tp3 = false;
   let dcaBtc = 0, dcaInvested = 0;
   let peakValue = startingCash;
+
+  // Trailing stop state: arms when price >40% above SMA, triggers at 10% drawdown from peak
+  let trailPeak = 0;
+  let trailSoldThisArm = false;
 
   const history: Array<{
     date: string; portfolioValue: number; btcValue: number;
@@ -431,10 +549,35 @@ function computeBacktest(
     // Daily interest on CASH.to balance
     cashBalance *= 1 + DAILY_RATE;
 
-    const zoneResult = determineZone(price, wma200w, ema20w, sma200d);
-    const zone = zoneResult.zone;
+    // ── Heat Index signals (per day) ───────────────────────────────────────
+    const pctAboveSma = (price - sma200d) / sma200d;
+    const dailyRsiVal = dailyRsi14[i];
+    const dailySmaAcc = smaAccArr[i];
+    const smaAccThreshold = sma200d * 0.003;
 
-    // Take-profit: check TP3 → TP2 → TP1 in order (highest first, one event per day)
+    const rsiExhausted = dailyRsiVal != null && dailyRsiVal > 80;
+    const smaParabolic = dailySmaAcc != null && dailySmaAcc > smaAccThreshold && pctAboveSma > 0.30;
+
+    // Trailing stop: track rolling peak while armed (>40% above SMA)
+    const trailArmed = pctAboveSma > 0.40;
+    if (trailArmed) {
+      if (price > trailPeak) trailPeak = price;
+    } else {
+      trailPeak = 0;
+      trailSoldThisArm = false;
+    }
+    const trailDrawdown = trailPeak > 0 ? (price - trailPeak) / trailPeak : 0;
+    const trailTriggered = trailArmed && trailPeak > 0 && trailDrawdown <= -0.10;
+
+    const heatActive = rsiExhausted || smaParabolic;
+
+    // ── Zone determination ─────────────────────────────────────────────────
+    const zoneResult = determineZone(price, wma200w, ema20w, sma200d);
+    const baseZone = zoneResult.zone;
+    // Heat index overrides to TAKE_PROFIT (stops new buys)
+    const zone: BtcZone = heatActive ? "TAKE_PROFIT" : baseZone;
+
+    // ── Take-profit sells: TP1/2/3 (SMA multiples) ────────────────────────
     const tpChecks: [boolean, string, string, number][] = [
       [tp3, "tp3", "TP3 +100%", 2.0],
       [tp2, "tp2", "TP2 +80%",  1.8],
@@ -454,7 +597,17 @@ function computeBacktest(
       }
     }
 
-    // Bi-monthly contribution on 1st and 15th
+    // ── Trailing stop sell: 20% of holdings when triggered (once per arm) ─
+    if (trailTriggered && !trailSoldThisArm && btcHoldings > 0) {
+      const sellBtc = btcHoldings * 0.20;
+      const proceeds = sellBtc * price;
+      btcHoldings -= sellBtc;
+      cashBalance += proceeds;
+      trailSoldThisArm = true;
+      trades.push({ date, type: "SELL", zone: "TAKE_PROFIT", label: "Heat: Trailing Stop", price, amount: proceeds, btcDelta: -sellBtc });
+    }
+
+    // ── Bi-monthly contribution on 1st and 15th ───────────────────────────
     const dom = parseInt(date.split("-")[2], 10);
     if (dom === 1 || dom === 15) {
       const multiplier = ZONE_MULTIPLIERS[zone];

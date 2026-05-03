@@ -18,3 +18,7 @@ export * from "./btcDashboard";
 export * from "./btcZone";
 export * from "./getBtcBacktestParams";
 export * from "./healthStatus";
+export * from "./heatSignalRsi";
+export * from "./heatSignals";
+export * from "./heatSignalSmaParabolic";
+export * from "./heatSignalTrailingStop";
