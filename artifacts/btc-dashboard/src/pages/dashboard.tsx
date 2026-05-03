@@ -11,9 +11,8 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
-  ReferenceArea,
 } from "recharts";
-import { Activity, Clock, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Minus, Eye, EyeOff, Flame, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Activity, Clock, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Minus, Eye, EyeOff } from "lucide-react";
 import {
   useGetBtcDashboard,
   useGetBtcChart,
@@ -62,16 +61,14 @@ function PctBadge({ pct }: { pct: number }) {
 }
 
 const TP_TOOLTIP_LABELS: Record<string, string> = {
-  _tp50: "TP1 +50%",
-  _tp80: "TP2 +80%",
-  _tp100: "TP3 +100%",
+  _tp20: "TP1 +20%",
+  _tp35: "TP2 +35%",
 };
 
 function CustomTooltip({ active, payload, label }: any) {
   if (active && payload && payload.length) {
     const mainEntries = payload.filter((e: any) => !String(e.dataKey).startsWith("_"));
     const tpEntries   = payload.filter((e: any) => String(e.dataKey).startsWith("_tp"));
-    const rsiEntry    = payload.find((e: any) => e.dataKey === "_rsi");
     return (
       <div className="bg-card border border-border p-3 rounded-md shadow-lg min-w-[210px]">
         <p className="text-xs text-muted-foreground mb-2 font-mono">
@@ -86,20 +83,6 @@ function CustomTooltip({ active, payload, label }: any) {
             <span className="text-foreground font-mono">{formatUsd(entry.value)}</span>
           </div>
         ))}
-        {rsiEntry && (
-          <div className="mt-2 pt-2 border-t border-border/50">
-            <div className="flex items-center justify-between gap-4 text-xs font-medium py-0.5">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: rsiEntry.color }} />
-                <span className="text-muted-foreground">Weekly RSI-14</span>
-              </div>
-              <span className={`font-mono font-semibold ${rsiEntry.value > 80 ? "text-red-400" : rsiEntry.value > 65 ? "text-yellow-400" : "text-foreground"}`}>
-                {rsiEntry.value.toFixed(1)}
-                {rsiEntry.value > 80 && <span className="ml-1 text-[10px]">⚠ HEAT</span>}
-              </span>
-            </div>
-          </div>
-        )}
         {tpEntries.length > 0 && (
           <div className="mt-2 pt-2 border-t border-border/50">
             <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
@@ -138,7 +121,6 @@ const ZONE_THRESHOLDS = [
 export default function Dashboard() {
   const [now, setNow] = useState(new Date());
   const [showTpLines, setShowTpLines] = useState(true);
-  const [showRsi, setShowRsi] = useState(true);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
@@ -168,7 +150,6 @@ export default function Dashboard() {
     );
   }
 
-  // Cast to include the extra fields we added
   const dash = dashboard as typeof dashboard & {
     triggerIndicator?: string;
     triggerDetail?: string;
@@ -179,53 +160,31 @@ export default function Dashboard() {
     weeklyCandlesUsed?: number;
   };
 
-  // Take-profit levels derived from 200D SMA
+  // Take-profit levels derived from 200D SMA — TP1 at +20%, TP2 at +35%
   const tpSma = dash?.sma200d ?? 0;
-  const tp50  = tpSma * 1.50;
-  const tp80  = tpSma * 1.80;
-  const tp100 = tpSma * 2.00;
+  const tp20  = tpSma * 1.20;
+  const tp35  = tpSma * 1.35;
   const fmtTpLabel = (v: number) => `$${(v / 1000).toFixed(0)}k`;
 
-  // Chart Y-axis bounds + augmented points with TP constants injected
+  // Chart Y-axis bounds
   const chartPrices = (chartData as any)?.points?.map((p: any) => p.price).filter(Boolean) as number[] | undefined;
   const chartDataMax = chartPrices?.length ? Math.max(...chartPrices) : 0;
   const chartDataMin = chartPrices?.length ? Math.min(...chartPrices) : 0;
-  const chartYMax = showTpLines && tp100 > 0
-    ? Math.max(chartDataMax, tp100) * 1.04
+  const chartYMax = showTpLines && tp35 > 0
+    ? Math.max(chartDataMax, tp35) * 1.06
     : chartDataMax * 1.04;
   const chartYMin = chartDataMin * 0.96;
 
-  // Inject dynamic TP fields per chart point, computed from each point's own 200D SMA.
-  // This makes TP lines curve with historical SMA rather than being flat constants.
-  // Always inject (undefined when hidden) so Recharts never deals with dynamic Line children.
+  // Inject dynamic TP fields per point (computed from each point's own 200D SMA)
   const rawPoints: Record<string, unknown>[] = (chartData as any)?.points ?? [];
   const chartPoints = rawPoints.map((p) => {
     const ptSma = p.sma200d as number | null | undefined;
-    const ptRsi = p.wRsi14 as number | null | undefined;
     return {
       ...p,
-      _tp50:  showTpLines && ptSma != null ? ptSma * 1.5 : undefined,
-      _tp80:  showTpLines && ptSma != null ? ptSma * 1.8 : undefined,
-      _tp100: showTpLines && ptSma != null ? ptSma * 2.0 : undefined,
-      _rsi:   showRsi && ptRsi != null ? ptRsi : undefined,
+      _tp20: showTpLines && ptSma != null ? ptSma * 1.20 : undefined,
+      _tp35: showTpLines && ptSma != null ? ptSma * 1.35 : undefined,
     };
   });
-
-  // Compute contiguous date ranges where heat signals are active (for chart shading)
-  const heatRanges = useMemo(() => {
-    const ranges: Array<{ x1: string; x2: string }> = [];
-    let start: string | null = null;
-    for (const p of rawPoints) {
-      if (p.heatActive) {
-        if (!start) start = p.date as string;
-      } else if (start) {
-        ranges.push({ x1: start, x2: p.date as string });
-        start = null;
-      }
-    }
-    if (start) ranges.push({ x1: start, x2: (rawPoints.at(-1)?.date as string) ?? start });
-    return ranges;
-  }, [rawPoints]);
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-5">
@@ -275,7 +234,6 @@ export default function Dashboard() {
               borderColor: `${dash.zoneColor}55`,
             }}
           >
-            {/* Glow */}
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
@@ -297,7 +255,6 @@ export default function Dashboard() {
               {dash.zoneLabel}
             </div>
 
-            {/* Trigger reason */}
             {dash.triggerDetail && (
               <p className="text-xs font-mono text-muted-foreground mb-3 z-10 bg-background/40 px-3 py-1 rounded-full border border-border/40">
                 Triggered by: {dash.triggerDetail}
@@ -307,16 +264,6 @@ export default function Dashboard() {
             <div className="bg-background/70 backdrop-blur-sm border border-border/60 px-5 py-3 rounded-full z-10">
               <p className="text-base font-medium text-foreground">{dash.actionText}</p>
             </div>
-
-            {(dash as any).safetyOverride && (
-              <div className="mt-4 z-10 flex items-start gap-2 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs max-w-lg text-left">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
-                <span>
-                  <span className="font-semibold text-amber-400">Safety override active — </span>
-                  price is &gt;25% above the 200D SMA. Aggressive accumulation is suspended. Contribution defaulted to Standard Buy (High) rate.
-                </span>
-              </div>
-            )}
           </motion.div>
         )}
       </section>
@@ -487,142 +434,19 @@ export default function Dashboard() {
                   <div className="font-mono text-xs mb-1">% above 200D SMA?</div>
                   <div className="text-xs font-bold text-muted-foreground">
                     {dash.pctFromSma200d != null && (
-                      <span className={dash.pctFromSma200d < 0 ? "text-blue-400" : dash.pctFromSma200d < 25 ? "text-blue-400" : dash.pctFromSma200d < 50 ? "text-yellow-400" : "text-red-400"}>
+                      <span className={
+                        dash.pctFromSma200d <= 0 ? "text-blue-400"
+                        : dash.pctFromSma200d < 20 ? "text-yellow-400"
+                        : "text-red-400"
+                      }>
                         {formatPct(dash.pctFromSma200d)} from SMA
                       </span>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    &lt;0%: Standard Buy Low &nbsp;·&nbsp; 25–50%: High &nbsp;·&nbsp; ≥50%: Take Profit
+                    ≤0%: Std Low &nbsp;·&nbsp; ≤+15%: Std High &nbsp;·&nbsp; ≥+20%: TP1 &nbsp;·&nbsp; ≥+35%: TP2
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-      )}
-
-      {/* Heat Index */}
-      {dash && (
-        <section>
-          <Card className={`border ${dash.heatSignals?.anyTriggered ? "border-red-500/50 bg-red-950/10" : "bg-card border-border"}`}>
-            <CardHeader className="p-4 border-b border-border flex flex-row items-center gap-2">
-              <Flame className={`w-5 h-5 shrink-0 ${dash.heatSignals?.anyTriggered ? "text-red-400" : "text-muted-foreground"}`} />
-              <div className="flex-1 min-w-0">
-                <CardTitle className="text-base flex items-center gap-2">
-                  Heat Index
-                  {dash.heatSignals?.anyTriggered ? (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
-                      SELL SIGNAL ACTIVE
-                    </span>
-                  ) : (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground border border-border">
-                      ALL CLEAR
-                    </span>
-                  )}
-                </CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Extended sell signals independent of price or SMA levels
-                </p>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-
-                {/* RSI Signal */}
-                {(() => {
-                  const sig = dash.heatSignals?.rsi;
-                  const active = sig?.active ?? false;
-                  return (
-                    <div className={`rounded-lg p-3 border ${active ? "border-red-500/50 bg-red-950/20" : "border-border bg-muted/20"}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-                          Weekly RSI Cap
-                        </div>
-                        <div className={`flex items-center gap-1 text-xs font-bold ${active ? "text-red-400" : "text-emerald-400"}`}>
-                          {active ? <ShieldAlert className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                          {active ? "TRIGGERED" : "CLEAR"}
-                        </div>
-                      </div>
-                      <div className={`text-2xl font-mono font-bold mb-1 ${active ? "text-red-400" : "text-foreground"}`}>
-                        {sig?.value != null ? sig.value.toFixed(1) : "—"}
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-2">Weekly RSI-14 · threshold 80</div>
-                      <div className={`w-full h-1.5 rounded-full bg-muted overflow-hidden`}>
-                        <div
-                          className={`h-full rounded-full transition-all ${(sig?.value ?? 0) > 80 ? "bg-red-500" : (sig?.value ?? 0) > 65 ? "bg-yellow-500" : "bg-emerald-500"}`}
-                          style={{ width: `${Math.min(100, ((sig?.value ?? 0) / 100) * 100)}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-[10px] text-muted-foreground/60 mt-1">
-                        <span>0</span><span className="text-yellow-500/70">65</span><span className="text-red-500/70">80</span><span>100</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground/80 mt-2 leading-relaxed">{sig?.description}</p>
-                    </div>
-                  );
-                })()}
-
-                {/* SMA Parabolic Signal */}
-                {(() => {
-                  const sig = dash.heatSignals?.smaParabolic;
-                  const active = sig?.active ?? false;
-                  const acc = sig?.acceleration ?? 0;
-                  return (
-                    <div className={`rounded-lg p-3 border ${active ? "border-red-500/50 bg-red-950/20" : "border-border bg-muted/20"}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-                          SMA Deceleration
-                        </div>
-                        <div className={`flex items-center gap-1 text-xs font-bold ${active ? "text-red-400" : "text-emerald-400"}`}>
-                          {active ? <ShieldAlert className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                          {active ? "TRIGGERED" : "CLEAR"}
-                        </div>
-                      </div>
-                      <div className={`text-2xl font-mono font-bold mb-1 ${active ? "text-red-400" : acc > 0 ? "text-yellow-400" : "text-foreground"}`}>
-                        {acc > 0 ? "+" : ""}{acc != null ? `$${Math.abs(acc).toFixed(0)}` : "—"}<span className="text-sm font-normal text-muted-foreground">/20d</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-2">200D SMA acceleration · triggers at &gt;30% above SMA</div>
-                      <div className="text-xs text-muted-foreground/80 mt-2 leading-relaxed">{sig?.description}</div>
-                    </div>
-                  );
-                })()}
-
-                {/* Trailing Stop Signal */}
-                {(() => {
-                  const sig = dash.heatSignals?.trailingStop;
-                  const triggered = sig?.triggered ?? false;
-                  const armed = sig?.armed ?? false;
-                  const drawdown = sig?.drawdownPct ?? 0;
-                  return (
-                    <div className={`rounded-lg p-3 border ${triggered ? "border-red-500/50 bg-red-950/20" : armed ? "border-yellow-500/40 bg-yellow-950/10" : "border-border bg-muted/20"}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-                          Trailing TP
-                        </div>
-                        <div className={`flex items-center gap-1 text-xs font-bold ${triggered ? "text-red-400" : armed ? "text-yellow-400" : "text-emerald-400"}`}>
-                          {triggered ? <ShieldAlert className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                          {triggered ? "TRIGGERED" : armed ? "ARMED" : "INACTIVE"}
-                        </div>
-                      </div>
-                      <div className={`text-2xl font-mono font-bold mb-1 ${triggered ? "text-red-400" : armed ? "text-yellow-400" : "text-muted-foreground"}`}>
-                        {armed ? `${drawdown.toFixed(1)}%` : "—"}
-                        <span className="text-sm font-normal text-muted-foreground ml-1">
-                          {armed ? "from peak" : ""}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-2">
-                        Arms &gt;40% above SMA · triggers at −10% drawdown from 20d peak
-                      </div>
-                      {armed && sig?.localPeak && (
-                        <div className="text-xs text-muted-foreground/80 mb-1 font-mono">
-                          20d peak: {formatUsd(sig.localPeak)}
-                        </div>
-                      )}
-                      <p className="text-xs text-muted-foreground/80 leading-relaxed">{sig?.description}</p>
-                    </div>
-                  );
-                })()}
-
               </div>
             </CardContent>
           </Card>
@@ -640,30 +464,17 @@ export default function Dashboard() {
                 BTC price with 200W WMA · 20W EMA · 200D SMA · Take Profit levels
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => setShowRsi((v) => !v)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
-                  showRsi
-                    ? "border-red-500/50 bg-red-950/30 text-red-400 hover:bg-red-950/50"
-                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
-                }`}
-              >
-                {showRsi ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                RSI
-              </button>
-              <button
-                onClick={() => setShowTpLines((v) => !v)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
-                  showTpLines
-                    ? "border-orange-500/50 bg-orange-950/30 text-orange-400 hover:bg-orange-950/50"
-                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
-                }`}
-              >
-                {showTpLines ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                TP Lines
-              </button>
-            </div>
+            <button
+              onClick={() => setShowTpLines((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors shrink-0 ${
+                showTpLines
+                  ? "border-orange-500/50 bg-orange-950/30 text-orange-400 hover:bg-orange-950/50"
+                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+              }`}
+            >
+              {showTpLines ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              TP Lines
+            </button>
           </CardHeader>
           <CardContent className="p-4 md:p-6">
             {isChartLoading || !chartData ? (
@@ -697,21 +508,6 @@ export default function Dashboard() {
                       domain={[chartYMin, chartYMax]}
                       width={48}
                     />
-                    {showRsi && (
-                      <YAxis
-                        yAxisId="rsi"
-                        orientation="right"
-                        domain={[0, 100]}
-                        fontSize={10}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(v) => `${v}`}
-                        ticks={[0, 30, 50, 70, 80, 100]}
-                        width={28}
-                        stroke="hsl(var(--muted-foreground))"
-                        opacity={0.5}
-                      />
-                    )}
                     <Tooltip content={<CustomTooltip />} />
                     <Legend
                       iconType="circle"
@@ -723,7 +519,6 @@ export default function Dashboard() {
                         { value: "200W WMA",   type: "circle", id: "wma200w", color: "#ef4444" },
                         { value: "20W EMA",    type: "circle", id: "ema20w",  color: "#3b82f6" },
                         { value: "200D SMA",   type: "circle", id: "sma200d", color: "#eab308" },
-                        ...(showRsi ? [{ value: "Weekly RSI-14", type: "circle" as const, id: "_rsi", color: "#f43f5e" }] : []),
                       ]}
                     />
                     <Line
@@ -777,39 +572,32 @@ export default function Dashboard() {
                         label={{ value: "Now", position: "right", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                       />
                     )}
-                    {/* Current Target reference lines — today's TP levels as flat horizontal markers */}
+                    {/* Current Take Profit target reference lines */}
                     {showTpLines && tpSma > 0 && (
                       <>
                         <ReferenceLine
                           yAxisId="price"
-                          y={tp50}
+                          y={tp20}
                           stroke="#f97316"
                           strokeOpacity={0.45}
                           strokeDasharray="2 6"
-                          label={{ value: `TP1 Target ${fmtTpLabel(tp50)}`, position: "insideTopRight", fontSize: 9, fill: "#f97316" }}
+                          label={{ value: `TP1 +20% ${fmtTpLabel(tp20)}`, position: "insideTopRight", fontSize: 9, fill: "#f97316" }}
                         />
                         <ReferenceLine
                           yAxisId="price"
-                          y={tp80}
+                          y={tp35}
                           stroke="#ef4444"
                           strokeOpacity={0.45}
                           strokeDasharray="2 6"
-                          label={{ value: `TP2 Target ${fmtTpLabel(tp80)}`, position: "insideTopRight", fontSize: 9, fill: "#ef4444" }}
-                        />
-                        <ReferenceLine
-                          yAxisId="price"
-                          y={tp100}
-                          stroke="#dc2626"
-                          strokeOpacity={0.45}
-                          strokeDasharray="2 6"
-                          label={{ value: `TP3 Target ${fmtTpLabel(tp100)}`, position: "insideTopRight", fontSize: 9, fill: "#dc2626" }}
+                          label={{ value: `TP2 +35% ${fmtTpLabel(tp35)}`, position: "insideTopRight", fontSize: 9, fill: "#ef4444" }}
                         />
                       </>
                     )}
+                    {/* Dynamic TP lines curved with historical SMA */}
                     <Line
                       yAxisId="price"
                       type="monotone"
-                      dataKey="_tp50"
+                      dataKey="_tp20"
                       stroke="#f97316"
                       strokeWidth={1.5}
                       strokeDasharray="8 4"
@@ -821,7 +609,7 @@ export default function Dashboard() {
                     <Line
                       yAxisId="price"
                       type="monotone"
-                      dataKey="_tp80"
+                      dataKey="_tp35"
                       stroke="#ef4444"
                       strokeWidth={1.5}
                       strokeDasharray="8 4"
@@ -829,53 +617,6 @@ export default function Dashboard() {
                       legendType="none"
                       isAnimationActive={false}
                       connectNulls={false}
-                    />
-                    <Line
-                      yAxisId="price"
-                      type="monotone"
-                      dataKey="_tp100"
-                      stroke="#dc2626"
-                      strokeWidth={1.5}
-                      strokeDasharray="8 4"
-                      dot={false}
-                      legendType="none"
-                      isAnimationActive={false}
-                      connectNulls={false}
-                    />
-                    {/* Heat zone shading — red tint over periods when RSI > 80 or SMA parabolic */}
-                    {showRsi && heatRanges.map((r, i) => (
-                      <ReferenceArea
-                        key={i}
-                        yAxisId="price"
-                        x1={r.x1}
-                        x2={r.x2}
-                        fill="#ef4444"
-                        fillOpacity={0.10}
-                      />
-                    ))}
-                    {/* RSI threshold line at 80 */}
-                    {showRsi && (
-                      <ReferenceLine
-                        yAxisId="rsi"
-                        y={80}
-                        stroke="#f43f5e"
-                        strokeDasharray="3 4"
-                        strokeOpacity={0.5}
-                        label={{ value: "RSI 80", position: "insideTopLeft", fontSize: 9, fill: "#f43f5e" }}
-                      />
-                    )}
-                    {/* RSI line — secondary axis, range 0-100 */}
-                    <Line
-                      yAxisId="rsi"
-                      type="monotone"
-                      dataKey="_rsi"
-                      stroke="#f43f5e"
-                      strokeWidth={1.5}
-                      dot={false}
-                      legendType="none"
-                      isAnimationActive={false}
-                      connectNulls
-                      strokeOpacity={0.85}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -885,18 +626,13 @@ export default function Dashboard() {
               <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-border">
                 <div className="flex items-center gap-1.5">
                   <span className="inline-block w-6 border-t-2 border-dashed border-[#f97316]" />
-                  <span className="text-xs font-semibold text-[#f97316]">TP1 +50%</span>
-                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp50)}</span>
+                  <span className="text-xs font-semibold text-[#f97316]">TP1 +20%</span>
+                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp20)}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="inline-block w-6 border-t-2 border-dashed border-[#ef4444]" />
-                  <span className="text-xs font-semibold text-[#ef4444]">TP2 +80%</span>
-                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp80)}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="inline-block w-6 border-t-2 border-dashed border-[#dc2626]" />
-                  <span className="text-xs font-semibold text-[#dc2626]">TP3 +100%</span>
-                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp100)}</span>
+                  <span className="text-xs font-semibold text-[#ef4444]">TP2 +35%</span>
+                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp35)}</span>
                 </div>
                 <span className="text-xs text-muted-foreground ml-auto self-center">Current Targets · hover chart for historical levels</span>
               </div>

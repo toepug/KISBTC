@@ -6,7 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BtcZone } from "./btcZone";
-import type { HeatSignals } from "./heatSignals";
 
 export interface BtcDashboard {
   /** Current BTC/USD price */
@@ -17,8 +16,6 @@ export interface BtcDashboard {
   ema20w: number;
   /** 200-Day Simple Moving Average */
   sma200d: number;
-  /** Current 14-period weekly RSI */
-  wRsi14: number;
   zone: BtcZone;
   /** Human-readable zone label */
   zoneLabel: string;
@@ -26,9 +23,6 @@ export interface BtcDashboard {
   zoneColor: string;
   /** Recommended action for the current zone */
   actionText: string;
-  /** True when price is >25% above 200D SMA and aggressive accumulation is suspended */
-  safetyOverride: boolean;
-  heatSignals: HeatSignals;
   /** Timestamp of the last data fetch */
   lastUpdated: Date;
 }

@@ -50,7 +50,7 @@ paths:
       operationId: getBtcBacktest
       tags: [btc]
       summary: Run strategy backtest
-      description: Simulates the KISBTC zone-based DCA strategy against historical BTC data
+      description: Simulates the Questrade V3.1 zone-based DCA strategy against historical BTC data
       parameters:
         - name: startDate
           in: query
@@ -128,37 +128,6 @@ components:
         - STANDARD_BUY_LOW
         - STANDARD_BUY_HIGH
         - TAKE_PROFIT
-    HeatSignalRsi:
-      type: object
-      properties:
-        active: { type: boolean }
-        value: { type: number, description: Current weekly RSI-14 value }
-        description: { type: string }
-      required: [active, value, description]
-    HeatSignalSmaParabolic:
-      type: object
-      properties:
-        active: { type: boolean }
-        acceleration: { type: number, description: SMA 2nd-derivative value (USD per 20-day period) }
-        description: { type: string }
-      required: [active, acceleration, description]
-    HeatSignalTrailingStop:
-      type: object
-      properties:
-        armed: { type: boolean, description: True when price is >40% above 200D SMA }
-        triggered: { type: boolean, description: True when armed and price drops 10% from 20-day peak }
-        localPeak: { type: number, description: Highest price in the last 20 days }
-        drawdownPct: { type: number, description: Percentage drop from local peak (negative = drawdown) }
-        description: { type: string }
-      required: [armed, triggered, localPeak, drawdownPct, description]
-    HeatSignals:
-      type: object
-      properties:
-        rsi: { $ref: "#/components/schemas/HeatSignalRsi" }
-        smaParabolic: { $ref: "#/components/schemas/HeatSignalSmaParabolic" }
-        trailingStop: { $ref: "#/components/schemas/HeatSignalTrailingStop" }
-        anyTriggered: { type: boolean, description: True if any heat signal is active }
-      required: [rsi, smaParabolic, trailingStop, anyTriggered]
     BtcDashboard:
       type: object
       properties:
@@ -174,9 +143,6 @@ components:
         sma200d:
           type: number
           description: 200-Day Simple Moving Average
-        wRsi14:
-          type: number
-          description: Current 14-period weekly RSI
         zone:
           $ref: "#/components/schemas/BtcZone"
         zoneLabel:
@@ -188,11 +154,6 @@ components:
         actionText:
           type: string
           description: Recommended action for the current zone
-        safetyOverride:
-          type: boolean
-          description: True when price is >25% above 200D SMA and aggressive accumulation is suspended
-        heatSignals:
-          $ref: "#/components/schemas/HeatSignals"
         lastUpdated:
           type: string
           format: date-time
@@ -202,13 +163,10 @@ components:
         - wma200w
         - ema20w
         - sma200d
-        - wRsi14
         - zone
         - zoneLabel
         - zoneColor
         - actionText
-        - safetyOverride
-        - heatSignals
         - lastUpdated
     BtcChartPoint:
       type: object
@@ -228,14 +186,6 @@ components:
         sma200d:
           type: number
           nullable: true
-        wRsi14:
-          type: number
-          nullable: true
-          description: 14-period weekly RSI (forward-filled from weekly to daily)
-        heatActive:
-          type: boolean
-          nullable: true
-          description: True when any heat index signal (RSI or SMA parabolic) is active on this date
       required:
         - date
         - price

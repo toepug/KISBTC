@@ -184,7 +184,7 @@ export function useGetBtcDashboard<
 }
 
 /**
- * Simulates the KISBTC zone-based DCA strategy against historical BTC data
+ * Simulates the Questrade V3.1 zone-based DCA strategy against historical BTC data
  * @summary Run strategy backtest
  */
 export const getGetBtcBacktestUrl = (params: GetBtcBacktestParams) => {

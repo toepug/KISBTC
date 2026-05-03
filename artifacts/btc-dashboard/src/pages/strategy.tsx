@@ -41,21 +41,21 @@ const ACCUMULATION_ROWS = [
   },
   {
     zone: "Standard Buy (Low)",
-    condition: "Price > 20W EMA and ≤ 25% above 200D SMA",
+    condition: "Price ≤ 200D SMA",
     action: "Contribute $500",
     color: "#3b82f6",
-    note: "Normal accumulation range — standard DCA",
+    note: "At or below the 200D baseline — standard DCA",
   },
   {
     zone: "Standard Buy (High)",
-    condition: "Price 25–50% above 200D SMA",
+    condition: "Price ≤ 200D SMA × 1.15",
     action: "Contribute $300",
     color: "#eab308",
-    note: "Elevated prices — reduce contribution size",
+    note: "Prices rising — reduce contribution size",
   },
   {
     zone: "Take Profit Zone",
-    condition: "Price ≥ 50% above 200D SMA",
+    condition: "Price ≥ 200D SMA × 1.20",
     action: "Contribute $0",
     color: "#ef4444",
     note: "Overheated — no new buys, manage exits only",
@@ -64,22 +64,16 @@ const ACCUMULATION_ROWS = [
 
 const TAKE_PROFIT_ROWS = [
   {
-    tranche: "Tranche 1 — 20%",
-    trigger: "Price ≥ 50% above 200D SMA",
+    tranche: "TP1 — 20% of holdings",
+    trigger: "Price ≥ 200D SMA × 1.20  (+20%)",
     action: "Sell 20% of BTC holdings",
     color: "#f97316",
   },
   {
-    tranche: "Tranche 2 — 20%",
-    trigger: "Price ≥ 80% above 200D SMA",
+    tranche: "TP2 — 20% of holdings",
+    trigger: "Price ≥ 200D SMA × 1.35  (+35%)",
     action: "Sell another 20% of BTC holdings",
     color: "#ef4444",
-  },
-  {
-    tranche: "Tranche 3 — 20%",
-    trigger: "Price ≥ 100% above 200D SMA (2×)",
-    action: "Sell another 20% of BTC holdings",
-    color: "#dc2626",
   },
 ];
 
@@ -173,7 +167,7 @@ export default function Strategy() {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <th className="py-2.5 pr-4 text-xs font-bold uppercase tracking-widest text-muted-foreground w-40">Tranche</th>
+                    <th className="py-2.5 pr-4 text-xs font-bold uppercase tracking-widest text-muted-foreground w-48">Tranche</th>
                     <th className="py-2.5 pr-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">Trigger</th>
                     <th className="py-2.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">Action</th>
                   </tr>
@@ -256,7 +250,7 @@ export default function Strategy() {
               <div className="rounded-lg border border-yellow-900/30 p-4 bg-yellow-950/10 space-y-1">
                 <p className="font-bold text-sm" style={{ color: "#eab308" }}>200-Day SMA</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Simple Moving Average of the daily close over 200 trading days. Used as the baseline for profit-taking decisions. Extensions of 50%, 80%, and 100% above this level are the sell triggers.
+                  Simple Moving Average of the daily close over 200 trading days. The baseline for profit-taking decisions. Extensions of +20% and +35% above this level are the two sell triggers.
                 </p>
               </div>
             </div>

@@ -19,40 +19,6 @@ export const BtcZone = {
   TAKE_PROFIT: "TAKE_PROFIT",
 } as const;
 
-export interface HeatSignalRsi {
-  active: boolean;
-  /** Current weekly RSI-14 value */
-  value: number;
-  description: string;
-}
-
-export interface HeatSignalSmaParabolic {
-  active: boolean;
-  /** SMA 2nd-derivative value (USD per 20-day period) */
-  acceleration: number;
-  description: string;
-}
-
-export interface HeatSignalTrailingStop {
-  /** True when price is >40% above 200D SMA */
-  armed: boolean;
-  /** True when armed and price drops 10% from 20-day peak */
-  triggered: boolean;
-  /** Highest price in the last 20 days */
-  localPeak: number;
-  /** Percentage drop from local peak (negative = drawdown) */
-  drawdownPct: number;
-  description: string;
-}
-
-export interface HeatSignals {
-  rsi: HeatSignalRsi;
-  smaParabolic: HeatSignalSmaParabolic;
-  trailingStop: HeatSignalTrailingStop;
-  /** True if any heat signal is active */
-  anyTriggered: boolean;
-}
-
 export interface BtcDashboard {
   /** Current BTC/USD price */
   currentPrice: number;
@@ -62,8 +28,6 @@ export interface BtcDashboard {
   ema20w: number;
   /** 200-Day Simple Moving Average */
   sma200d: number;
-  /** Current 14-period weekly RSI */
-  wRsi14: number;
   zone: BtcZone;
   /** Human-readable zone label */
   zoneLabel: string;
@@ -71,9 +35,6 @@ export interface BtcDashboard {
   zoneColor: string;
   /** Recommended action for the current zone */
   actionText: string;
-  /** True when price is >25% above 200D SMA and aggressive accumulation is suspended */
-  safetyOverride: boolean;
-  heatSignals: HeatSignals;
   /** Timestamp of the last data fetch */
   lastUpdated: string;
 }
@@ -84,10 +45,6 @@ export interface BtcChartPoint {
   wma200w?: number | null;
   ema20w?: number | null;
   sma200d?: number | null;
-  /** 14-period weekly RSI (forward-filled from weekly to daily) */
-  wRsi14?: number | null;
-  /** True when any heat index signal (RSI or SMA parabolic) is active on this date */
-  heatActive?: boolean | null;
 }
 
 export interface BtcChartData {

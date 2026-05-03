@@ -24,7 +24,6 @@ export const GetBtcDashboardResponse = zod.object({
   wma200w: zod.number().describe("200-Week Weighted Moving Average"),
   ema20w: zod.number().describe("20-Week Exponential Moving Average"),
   sma200d: zod.number().describe("200-Day Simple Moving Average"),
-  wRsi14: zod.number().describe("Current 14-period weekly RSI"),
   zone: zod.enum([
     "MAX_ACCUMULATION",
     "AGGRESSIVE_BUY",
@@ -35,42 +34,11 @@ export const GetBtcDashboardResponse = zod.object({
   zoneLabel: zod.string().describe("Human-readable zone label"),
   zoneColor: zod.string().describe("Color associated with the zone (hex)"),
   actionText: zod.string().describe("Recommended action for the current zone"),
-  safetyOverride: zod
-    .boolean()
-    .describe(
-      "True when price is >25% above 200D SMA and aggressive accumulation is suspended",
-    ),
-  heatSignals: zod.object({
-    rsi: zod.object({
-      active: zod.boolean(),
-      value: zod.number().describe("Current weekly RSI-14 value"),
-      description: zod.string(),
-    }),
-    smaParabolic: zod.object({
-      active: zod.boolean(),
-      acceleration: zod
-        .number()
-        .describe("SMA 2nd-derivative value (USD per 20-day period)"),
-      description: zod.string(),
-    }),
-    trailingStop: zod.object({
-      armed: zod.boolean().describe("True when price is >40% above 200D SMA"),
-      triggered: zod
-        .boolean()
-        .describe("True when armed and price drops 10% from 20-day peak"),
-      localPeak: zod.number().describe("Highest price in the last 20 days"),
-      drawdownPct: zod
-        .number()
-        .describe("Percentage drop from local peak (negative = drawdown)"),
-      description: zod.string(),
-    }),
-    anyTriggered: zod.boolean().describe("True if any heat signal is active"),
-  }),
   lastUpdated: zod.coerce.date().describe("Timestamp of the last data fetch"),
 });
 
 /**
- * Simulates the KISBTC zone-based DCA strategy against historical BTC data
+ * Simulates the Questrade V3.1 zone-based DCA strategy against historical BTC data
  * @summary Run strategy backtest
  */
 export const getBtcBacktestQueryBaseInstallmentDefault = 500;
@@ -152,16 +120,6 @@ export const GetBtcChartResponse = zod.object({
       wma200w: zod.number().nullish(),
       ema20w: zod.number().nullish(),
       sma200d: zod.number().nullish(),
-      wRsi14: zod
-        .number()
-        .nullish()
-        .describe("14-period weekly RSI (forward-filled from weekly to daily)"),
-      heatActive: zod
-        .boolean()
-        .nullish()
-        .describe(
-          "True when any heat index signal (RSI or SMA parabolic) is active on this date",
-        ),
     }),
   ),
   currentZone: zod.enum([
