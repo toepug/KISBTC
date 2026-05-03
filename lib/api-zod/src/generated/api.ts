@@ -34,6 +34,11 @@ export const GetBtcDashboardResponse = zod.object({
   zoneLabel: zod.string().describe("Human-readable zone label"),
   zoneColor: zod.string().describe("Color associated with the zone (hex)"),
   actionText: zod.string().describe("Recommended action for the current zone"),
+  safetyOverride: zod
+    .boolean()
+    .describe(
+      "True when price is >25% above 200D SMA and aggressive accumulation is suspended",
+    ),
   lastUpdated: zod.coerce.date().describe("Timestamp of the last data fetch"),
 });
 

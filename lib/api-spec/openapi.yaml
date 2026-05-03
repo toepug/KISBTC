@@ -154,6 +154,9 @@ components:
         actionText:
           type: string
           description: Recommended action for the current zone
+        safetyOverride:
+          type: boolean
+          description: True when price is >25% above 200D SMA and aggressive accumulation is suspended
         lastUpdated:
           type: string
           format: date-time
@@ -167,6 +170,7 @@ components:
         - zoneLabel
         - zoneColor
         - actionText
+        - safetyOverride
         - lastUpdated
     BtcChartPoint:
       type: object

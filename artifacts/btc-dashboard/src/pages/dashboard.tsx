@@ -240,6 +240,16 @@ export default function Dashboard() {
             <div className="bg-background/70 backdrop-blur-sm border border-border/60 px-5 py-3 rounded-full z-10">
               <p className="text-base font-medium text-foreground">{dash.actionText}</p>
             </div>
+
+            {(dash as any).safetyOverride && (
+              <div className="mt-4 z-10 flex items-start gap-2 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs max-w-lg text-left">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
+                <span>
+                  <span className="font-semibold text-amber-400">Safety override active — </span>
+                  price is &gt;25% above the 200D SMA. Aggressive accumulation is suspended. Contribution defaulted to Standard Buy (High) rate.
+                </span>
+              </div>
+            )}
           </motion.div>
         )}
       </section>

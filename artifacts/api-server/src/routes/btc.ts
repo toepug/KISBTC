@@ -124,6 +124,7 @@ interface ZoneResult {
   zone: BtcZone;
   triggerIndicator: string;
   triggerDetail: string;
+  safetyOverride: boolean;
 }
 
 function determineZone(
@@ -132,40 +133,69 @@ function determineZone(
   ema20w: number,
   sma200d: number
 ): ZoneResult {
+  const sma125 = sma200d * 1.25;
+  const sma150 = sma200d * 1.5;
+  const smafmt = sma200d.toLocaleString("en-US", { maximumFractionDigits: 0 });
+
+  // Safety override: if price is >25% above the 200D SMA, aggressive accumulation is
+  // never recommended regardless of what other indicators suggest.
+  const extendedAboveSma = price > sma125;
+
   if (price <= wma200w) {
+    if (extendedAboveSma) {
+      return {
+        zone: "STANDARD_BUY_HIGH",
+        triggerIndicator: "Safety Override",
+        triggerDetail: `Price >25% above 200D SMA ($${smafmt}) — aggressive accumulation suspended`,
+        safetyOverride: true,
+      };
+    }
     return {
       zone: "MAX_ACCUMULATION",
       triggerIndicator: "200W WMA",
       triggerDetail: `Price ≤ 200W WMA ($${wma200w.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+      safetyOverride: false,
     };
   }
+
   if (price <= ema20w) {
+    if (extendedAboveSma) {
+      return {
+        zone: "STANDARD_BUY_HIGH",
+        triggerIndicator: "Safety Override",
+        triggerDetail: `Price >25% above 200D SMA ($${smafmt}) — aggressive accumulation suspended`,
+        safetyOverride: true,
+      };
+    }
     return {
       zone: "AGGRESSIVE_BUY",
       triggerIndicator: "20W EMA",
       triggerDetail: `Price ≤ 20W EMA ($${ema20w.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+      safetyOverride: false,
     };
   }
-  const sma125 = sma200d * 1.25;
-  const sma150 = sma200d * 1.5;
+
   if (price <= sma125) {
     return {
       zone: "STANDARD_BUY_LOW",
       triggerIndicator: "200D SMA",
-      triggerDetail: `Price within 25% of 200D SMA ($${sma200d.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+      triggerDetail: `Price within 25% of 200D SMA ($${smafmt})`,
+      safetyOverride: false,
     };
   }
   if (price < sma150) {
     return {
       zone: "STANDARD_BUY_HIGH",
       triggerIndicator: "200D SMA",
-      triggerDetail: `Price 25–50% above 200D SMA ($${sma200d.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+      triggerDetail: `Price 25–50% above 200D SMA ($${smafmt})`,
+      safetyOverride: false,
     };
   }
   return {
     zone: "TAKE_PROFIT",
     triggerIndicator: "200D SMA",
-    triggerDetail: `Price ≥ 50% above 200D SMA ($${sma200d.toLocaleString("en-US", { maximumFractionDigits: 0 })})`,
+    triggerDetail: `Price ≥ 50% above 200D SMA ($${smafmt})`,
+    safetyOverride: false,
   };
 }
 
@@ -285,6 +315,7 @@ async function fetchBtcData() {
         actionText: ZONE_ACTIONS[zoneResult.zone],
         triggerIndicator: zoneResult.triggerIndicator,
         triggerDetail: zoneResult.triggerDetail,
+        safetyOverride: zoneResult.safetyOverride,
         pctFromWma200w: parseFloat(pctFromWma200w.toFixed(2)),
         pctFromEma20w: parseFloat(pctFromEma20w.toFixed(2)),
         pctFromSma200d: parseFloat(pctFromSma200d.toFixed(2)),

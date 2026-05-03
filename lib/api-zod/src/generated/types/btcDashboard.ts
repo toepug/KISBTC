@@ -23,6 +23,8 @@ export interface BtcDashboard {
   zoneColor: string;
   /** Recommended action for the current zone */
   actionText: string;
+  /** True when price is >25% above 200D SMA and aggressive accumulation is suspended */
+  safetyOverride: boolean;
   /** Timestamp of the last data fetch */
   lastUpdated: Date;
 }
