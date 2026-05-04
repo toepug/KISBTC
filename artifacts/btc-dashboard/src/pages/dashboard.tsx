@@ -62,9 +62,9 @@ function PctBadge({ pct }: { pct: number }) {
 }
 
 const TP_TOOLTIP_LABELS: Record<string, string> = {
-  _tp20: "TP1 +20%",
-  _tp30: "TP2 +30%",
-  _tp40: "TP3 +40%",
+  _tp15: "TP1 +15%",
+  _tp50: "TP2 +50%",
+  _tp75: "TP3 +75%",
 };
 
 interface ChartTooltipState {
@@ -161,11 +161,11 @@ export default function Dashboard() {
     weeklyCandlesUsed?: number;
   };
 
-  // Take-profit levels derived from 200D SMA — TP1 +20%, TP2 +30%, TP3 +40%
+  // Take-profit levels derived from 200D SMA — TP1 +15%, TP2 +50%, TP3 +75%
   const tpSma = dash?.sma200d ?? 0;
-  const tp20  = tpSma * 1.20;
-  const tp30  = tpSma * 1.30;
-  const tp40  = tpSma * 1.40;
+  const tp15  = tpSma * 1.15;
+  const tp50  = tpSma * 1.50;
+  const tp75  = tpSma * 1.75;
   const fmtTpLabel = (v: number) => `$${(v / 1000).toFixed(0)}k`;
 
   // Inject dynamic TP and zone boundary fields per point (computed from each point's own 200D SMA)
@@ -175,9 +175,9 @@ export default function Dashboard() {
     return {
       ...p,
       sma115: ptSma != null ? ptSma * 1.15 : undefined,
-      _tp20: showTpLines && ptSma != null ? ptSma * 1.20 : undefined,
-      _tp30: showTpLines && ptSma != null ? ptSma * 1.30 : undefined,
-      _tp40: showTpLines && ptSma != null ? ptSma * 1.40 : undefined,
+      _tp15: showTpLines && ptSma != null ? ptSma * 1.15 : undefined,
+      _tp50: showTpLines && ptSma != null ? ptSma * 1.50 : undefined,
+      _tp75: showTpLines && ptSma != null ? ptSma * 1.75 : undefined,
     };
   });
 
@@ -200,7 +200,7 @@ export default function Dashboard() {
   const visiblePrices = chartPoints.map((p) => p.price as number).filter(Boolean);
   const visibleMax = visiblePrices.length ? Math.max(...visiblePrices) : 0;
   const visibleMin = visiblePrices.length ? Math.min(...visiblePrices) : 0;
-  const chartYMax = showTpLines && tp40 > 0 ? Math.max(visibleMax, tp40) * 1.06 : visibleMax * 1.04;
+  const chartYMax = showTpLines && tp75 > 0 ? Math.max(visibleMax, tp75) * 1.06 : visibleMax * 1.04;
   const chartYMin = visibleMin * 0.96;
 
   const isZoomed = zoomDomain !== null;
@@ -481,7 +481,7 @@ export default function Dashboard() {
                     {dash.pctFromSma200d != null && (
                       <span className={
                         dash.pctFromSma200d <= 0 ? "text-blue-400"
-                        : dash.pctFromSma200d < 20 ? "text-yellow-400"
+                        : dash.pctFromSma200d < 15 ? "text-yellow-400"
                         : "text-red-400"
                       }>
                         {formatPct(dash.pctFromSma200d)} from SMA
@@ -489,7 +489,7 @@ export default function Dashboard() {
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    ≤0%: Std Low &nbsp;·&nbsp; ≤+15%: Std High &nbsp;·&nbsp; ≥+20%: TP1 &nbsp;·&nbsp; ≥+30%: TP2 &nbsp;·&nbsp; ≥+40%: TP3
+                    ≤0%: Std Low &nbsp;·&nbsp; &lt;+15%: Std High &nbsp;·&nbsp; ≥+15%: TP1 &nbsp;·&nbsp; ≥+50%: TP2 &nbsp;·&nbsp; ≥+75%: TP3
                   </div>
                 </div>
               </div>
@@ -766,27 +766,27 @@ export default function Dashboard() {
                       <>
                         <ReferenceLine
                           yAxisId="price"
-                          y={tp20}
+                          y={tp15}
                           stroke="#f97316"
                           strokeOpacity={0.45}
                           strokeDasharray="2 6"
-                          label={{ value: `TP1 +20% ${fmtTpLabel(tp20)}`, position: "insideTopRight", fontSize: 9, fill: "#f97316" }}
+                          label={{ value: `TP1 +15% ${fmtTpLabel(tp15)}`, position: "insideTopRight", fontSize: 9, fill: "#f97316" }}
                         />
                         <ReferenceLine
                           yAxisId="price"
-                          y={tp30}
+                          y={tp50}
                           stroke="#ef4444"
                           strokeOpacity={0.45}
                           strokeDasharray="2 6"
-                          label={{ value: `TP2 +30% ${fmtTpLabel(tp30)}`, position: "insideTopRight", fontSize: 9, fill: "#ef4444" }}
+                          label={{ value: `TP2 +50% ${fmtTpLabel(tp50)}`, position: "insideTopRight", fontSize: 9, fill: "#ef4444" }}
                         />
                         <ReferenceLine
                           yAxisId="price"
-                          y={tp40}
+                          y={tp75}
                           stroke="#dc2626"
                           strokeOpacity={0.45}
                           strokeDasharray="2 6"
-                          label={{ value: `TP3 +40% ${fmtTpLabel(tp40)}`, position: "insideTopRight", fontSize: 9, fill: "#dc2626" }}
+                          label={{ value: `TP3 +75% ${fmtTpLabel(tp75)}`, position: "insideTopRight", fontSize: 9, fill: "#dc2626" }}
                         />
                       </>
                     )}
@@ -807,7 +807,7 @@ export default function Dashboard() {
                     <Line
                       yAxisId="price"
                       type="monotone"
-                      dataKey="_tp20"
+                      dataKey="_tp15"
                       stroke="#f97316"
                       strokeWidth={1.5}
                       strokeDasharray="8 4"
@@ -819,7 +819,7 @@ export default function Dashboard() {
                     <Line
                       yAxisId="price"
                       type="monotone"
-                      dataKey="_tp30"
+                      dataKey="_tp50"
                       stroke="#ef4444"
                       strokeWidth={1.5}
                       strokeDasharray="8 4"
@@ -831,7 +831,7 @@ export default function Dashboard() {
                     <Line
                       yAxisId="price"
                       type="monotone"
-                      dataKey="_tp40"
+                      dataKey="_tp75"
                       stroke="#dc2626"
                       strokeWidth={1.5}
                       strokeDasharray="8 4"
@@ -880,18 +880,18 @@ export default function Dashboard() {
               <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-border">
                 <div className="flex items-center gap-1.5">
                   <span className="inline-block w-6 border-t-2 border-dashed border-[#f97316]" />
-                  <span className="text-xs font-semibold text-[#f97316]">TP1 +20%</span>
-                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp20)}</span>
+                  <span className="text-xs font-semibold text-[#f97316]">TP1 +15%</span>
+                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp15)}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="inline-block w-6 border-t-2 border-dashed border-[#ef4444]" />
-                  <span className="text-xs font-semibold text-[#ef4444]">TP2 +30%</span>
-                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp30)}</span>
+                  <span className="text-xs font-semibold text-[#ef4444]">TP2 +50%</span>
+                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp50)}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="inline-block w-6 border-t-2 border-dashed border-[#dc2626]" />
-                  <span className="text-xs font-semibold text-[#dc2626]">TP3 +40%</span>
-                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp40)}</span>
+                  <span className="text-xs font-semibold text-[#dc2626]">TP3 +75%</span>
+                  <span className="text-xs text-muted-foreground font-mono">{fmtTpLabel(tp75)}</span>
                 </div>
                 <span className="text-xs text-muted-foreground ml-auto self-center">Current Targets · hover chart for historical levels</span>
               </div>

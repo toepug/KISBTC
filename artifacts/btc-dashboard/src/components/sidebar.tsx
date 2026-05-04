@@ -39,7 +39,7 @@ export default function Sidebar() {
         </nav>
         <div className="px-5 py-4 border-t border-border">
           <p className="text-[10px] text-muted-foreground/60 leading-relaxed">
-            Questrade V3.1<br />Data: Kraken · Auto-refreshes every 60s
+            Questrade V4.0<br />Data: Kraken · Auto-refreshes every 60s
           </p>
         </div>
       </aside>

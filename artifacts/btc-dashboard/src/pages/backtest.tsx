@@ -111,7 +111,7 @@ export default function Backtest() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Backtest Calculator</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Simulate the Questrade V3.1 zone-based DCA strategy against real historical BTC prices.
+          Simulate the Questrade V4.0 zone-based DCA strategy against real historical BTC prices.
         </p>
       </div>
 

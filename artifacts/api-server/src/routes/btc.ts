@@ -166,38 +166,38 @@ function determineZone(
     };
   }
 
-  // Standard Buy (High): above SMA up to +20% (user threshold is ≤ +15%, gap to +20% stays High)
-  if (price < sma200d * 1.20) {
+  // Standard Buy (High): above SMA up to +15%
+  if (price < sma200d * 1.15) {
     return {
       zone: "STANDARD_BUY_HIGH",
       triggerIndicator: "200D SMA",
-      triggerDetail: `Price within 20% above 200D SMA ($${smafmt(sma200d)})`,
+      triggerDetail: `Price within 15% above 200D SMA ($${smafmt(sma200d)})`,
     };
   }
 
-  // Take Profit 1: +20% to +30%
-  if (price < sma200d * 1.30) {
+  // Take Profit 1: +15% to +50%
+  if (price < sma200d * 1.50) {
     return {
       zone: "TAKE_PROFIT",
       triggerIndicator: "200D SMA",
-      triggerDetail: `Price +20% above 200D SMA ($${smafmt(sma200d)}) — TP1`,
+      triggerDetail: `Price +15% above 200D SMA ($${smafmt(sma200d)}) — TP1`,
     };
   }
 
-  // Take Profit 2: +30% to +40%
-  if (price < sma200d * 1.40) {
+  // Take Profit 2: +50% to +75%
+  if (price < sma200d * 1.75) {
     return {
       zone: "TAKE_PROFIT",
       triggerIndicator: "200D SMA",
-      triggerDetail: `Price +30% above 200D SMA ($${smafmt(sma200d)}) — TP2`,
+      triggerDetail: `Price +50% above 200D SMA ($${smafmt(sma200d)}) — TP2`,
     };
   }
 
-  // Take Profit 3: +40% and above
+  // Take Profit 3: +75% and above
   return {
     zone: "TAKE_PROFIT",
     triggerIndicator: "200D SMA",
-    triggerDetail: `Price +40% above 200D SMA ($${smafmt(sma200d)}) — TP3`,
+    triggerDetail: `Price +75% above 200D SMA ($${smafmt(sma200d)}) — TP3`,
   };
 }
 
@@ -219,15 +219,15 @@ const ZONE_COLORS: Record<BtcZone, string> = {
 
 const ZONE_ACTIONS: Record<BtcZone, string> = {
   MAX_ACCUMULATION:
-    "Double your contribution ($1,000) — price is at or below the 200W WMA. Deploy maximum capital.",
+    "Contribute $3,000 (6×) — price is at or below the 200W WMA. Deploy maximum capital.",
   AGGRESSIVE_BUY:
-    "Contribute $750 — price is below the 20W EMA. Strong buy signal.",
+    "Contribute $2,000 (4×) — price is below the 20W EMA. Strong buy signal.",
   STANDARD_BUY_LOW:
-    "Contribute $500 — price is at or below the 200D SMA. Standard DCA range.",
+    "Contribute $1,000 (2×) — price is at or below the 200D SMA. Standard DCA range.",
   STANDARD_BUY_HIGH:
-    "Contribute $300 — price is within 20% above the 200D SMA. Reduce contribution size.",
+    "Contribute $500 (1×) — price is within 15% above the 200D SMA. Base contribution.",
   TAKE_PROFIT:
-    "Contribute $0 — price is 20%+ above the 200D SMA. No new buys; manage exits only.",
+    "Contribute $0 — price is 15%+ above the 200D SMA. No new buys; manage exits only.",
 };
 
 interface RawBtcData {
@@ -376,10 +376,10 @@ async function fetchBtcData() {
 // ─── Backtest engine ──────────────────────────────────────────────────────────
 
 const ZONE_MULTIPLIERS: Record<BtcZone, number> = {
-  MAX_ACCUMULATION: 2.0,
-  AGGRESSIVE_BUY: 1.5,
-  STANDARD_BUY_LOW: 1.0,
-  STANDARD_BUY_HIGH: 0.6,
+  MAX_ACCUMULATION: 6.0,
+  AGGRESSIVE_BUY: 4.0,
+  STANDARD_BUY_LOW: 2.0,
+  STANDARD_BUY_HIGH: 1.0,
   TAKE_PROFIT: 0.0,
 };
 
@@ -438,20 +438,20 @@ function computeBacktest(
     const zoneResult = determineZone(price, wma200w, ema20w, sma200d);
     const zone = zoneResult.zone;
 
-    // Reset TP flags when price drops clearly back below the TP1 trigger.
-    // SMA×1.15 is the hysteresis band — prevents whipsaw re-fires while still
-    // allowing fresh tranches after a real pullback.
-    if (price < sma200d * 1.15) { tp1 = false; tp2 = false; tp3 = false; }
+    // Reset TP flags when price drops back below the hysteresis band.
+    // SMA×1.10 gives a buffer below the TP1 trigger at 1.15 — prevents
+    // whipsaw re-fires while still allowing fresh tranches after a real pullback.
+    if (price < sma200d * 1.10) { tp1 = false; tp2 = false; tp3 = false; }
 
     // Take-profit sells: check TP1 → TP2 → TP3 in order; one tranche per day
     const tpChecks: [boolean, string, string, number][] = [
-      [tp1, "tp1", "TP1 +20%", 1.20],
-      [tp2, "tp2", "TP2 +30%", 1.30],
-      [tp3, "tp3", "TP3 +40%", 1.40],
+      [tp1, "tp1", "TP1 +15%", 1.15],
+      [tp2, "tp2", "TP2 +50%", 1.50],
+      [tp3, "tp3", "TP3 +75%", 1.75],
     ];
     for (const [triggered, key, label, mult] of tpChecks) {
       if (!triggered && price >= sma200d * mult && btcHoldings > 0) {
-        const sellBtc = btcHoldings * 0.20;
+        const sellBtc = btcHoldings * 0.25;
         const proceeds = sellBtc * price;
         btcHoldings -= sellBtc;
         cashBalance += proceeds;

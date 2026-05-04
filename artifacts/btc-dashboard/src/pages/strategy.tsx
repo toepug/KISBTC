@@ -28,34 +28,34 @@ const ACCUMULATION_ROWS = [
   {
     zone: "Max Accumulation",
     condition: "Price ≤ 200W WMA",
-    action: "Contribute $1,000",
+    action: "Contribute $3,000 (6×)",
     color: "#22c55e",
     note: "Rare historic floor — deploy maximum capital",
   },
   {
     zone: "Aggressive Buy",
     condition: "Price ≤ 20W EMA",
-    action: "Contribute $750",
+    action: "Contribute $2,000 (4×)",
     color: "#4ade80",
     note: "Below the 20-week trend — strong buy signal",
   },
   {
     zone: "Standard Buy (Low)",
     condition: "Price ≤ 200D SMA",
-    action: "Contribute $500",
+    action: "Contribute $1,000 (2×)",
     color: "#3b82f6",
     note: "At or below the 200D baseline — standard DCA",
   },
   {
     zone: "Standard Buy (High)",
-    condition: "Price ≤ 200D SMA × 1.15",
-    action: "Contribute $300",
+    condition: "Price < 200D SMA × 1.15",
+    action: "Contribute $500 (1×)",
     color: "#eab308",
-    note: "Prices rising — reduce contribution size",
+    note: "Prices rising — base contribution only",
   },
   {
     zone: "Take Profit Zone",
-    condition: "Price ≥ 200D SMA × 1.20",
+    condition: "Price ≥ 200D SMA × 1.15",
     action: "Contribute $0",
     color: "#ef4444",
     note: "Overheated — no new buys, manage exits only",
@@ -64,21 +64,21 @@ const ACCUMULATION_ROWS = [
 
 const TAKE_PROFIT_ROWS = [
   {
-    tranche: "TP1 — 20% of holdings",
-    trigger: "Price ≥ 200D SMA × 1.20  (+20%)",
-    action: "Sell 20% of BTC holdings",
+    tranche: "TP1 — 25% of holdings",
+    trigger: "Price ≥ 200D SMA × 1.15  (+15%)",
+    action: "Sell 25% of BTC holdings",
     color: "#f97316",
   },
   {
-    tranche: "TP2 — 20% of holdings",
-    trigger: "Price ≥ 200D SMA × 1.30  (+30%)",
-    action: "Sell another 20% of BTC holdings",
+    tranche: "TP2 — 25% of holdings",
+    trigger: "Price ≥ 200D SMA × 1.50  (+50%)",
+    action: "Sell another 25% of BTC holdings",
     color: "#ef4444",
   },
   {
-    tranche: "TP3 — 20% of holdings",
-    trigger: "Price ≥ 200D SMA × 1.40  (+40%)",
-    action: "Sell another 20% of BTC holdings",
+    tranche: "TP3 — 25% of holdings",
+    trigger: "Price ≥ 200D SMA × 1.75  (+75%)",
+    action: "Sell another 25% of BTC holdings",
     color: "#dc2626",
   },
 ];
@@ -93,7 +93,7 @@ export default function Strategy() {
           Bitcoin &amp; CASH.to Dynamic Strategy
         </h1>
         <p className="text-muted-foreground text-sm mt-1 font-mono">
-          Questrade V3.1 &nbsp;·&nbsp; $0-commission execution &nbsp;·&nbsp; Idle cash parked in CASH.to
+          Questrade V4.0 &nbsp;·&nbsp; $0-commission execution &nbsp;·&nbsp; Idle cash parked in CASH.to
         </p>
       </motion.div>
 
@@ -165,7 +165,7 @@ export default function Strategy() {
           <CardHeader className="p-5 pb-3">
             <SectionHeading icon={TrendingDown} title="Take Profit Rules — Ladder-Out Tranches" color="text-red-400" />
             <p className="text-xs text-muted-foreground mt-1">
-              Sell checks on <strong className="text-foreground">Sunday nights</strong> using the weekly close. Each sell is 20% of your <em>total BTC position</em> at that moment.
+              Sell checks on <strong className="text-foreground">Sunday nights</strong> using the weekly close. Each sell is 25% of your <em>total BTC position</em> at that moment.
             </p>
           </CardHeader>
           <CardContent className="p-5 pt-0">
@@ -256,7 +256,7 @@ export default function Strategy() {
               <div className="rounded-lg border border-yellow-900/30 p-4 bg-yellow-950/10 space-y-1">
                 <p className="font-bold text-sm" style={{ color: "#eab308" }}>200-Day SMA</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Simple Moving Average of the daily close over 200 trading days. The baseline for profit-taking decisions. Extensions of +20% and +35% above this level are the two sell triggers.
+                  Simple Moving Average of the daily close over 200 trading days. The baseline for profit-taking decisions. Extensions of +15%, +50%, and +75% above this level are the three sell triggers.
                 </p>
               </div>
             </div>
