@@ -84,6 +84,7 @@ export default function Dashboard() {
   const [now, setNow] = useState(new Date());
   const [showTpLines, setShowTpLines] = useState(true);
   const [chartTooltip, setChartTooltip] = useState<ChartTooltipState | null>(null);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
@@ -444,10 +445,24 @@ export default function Dashboard() {
             {isChartLoading || !chartData ? (
               <Skeleton className="h-[420px] w-full rounded-xl" />
             ) : (
-              <div className="h-[420px] w-full relative">
-                {/* Pinned hover tooltip — top-right corner, never overlaps the chart */}
-                {chartTooltip && (
-                  <div className="absolute top-2 right-2 z-10 bg-card border border-border p-3 rounded-md shadow-lg min-w-[210px] pointer-events-none">
+              <div
+                className="h-[420px] w-full relative"
+                onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                }}
+                onMouseLeave={() => { setMousePos(null); setChartTooltip(null); }}
+              >
+                {/* Follows cursor — rendered above and to the left of the mouse */}
+                {chartTooltip && mousePos && (
+                  <div
+                    className="absolute z-10 bg-card border border-border p-3 rounded-md shadow-lg min-w-[210px] pointer-events-none"
+                    style={{
+                      left: mousePos.x,
+                      top: mousePos.y,
+                      transform: "translate(calc(-100% - 12px), calc(-100% - 12px))",
+                    }}
+                  >
                     <p className="text-xs text-muted-foreground mb-2 font-mono">
                       {chartTooltip.label ? format(new Date(chartTooltip.label + "T00:00:00"), "MMM d, yyyy") : ""}
                     </p>
@@ -500,7 +515,6 @@ export default function Dashboard() {
                         });
                       }
                     }}
-                    onMouseLeave={() => setChartTooltip(null)}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                     <XAxis
