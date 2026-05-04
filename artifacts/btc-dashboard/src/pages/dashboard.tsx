@@ -204,6 +204,7 @@ export default function Dashboard() {
 
   // Pan helper — shifts an ISO date string by N days, clamped to available data
   const allDates = allChartPoints.map((p) => p.date as string);
+  const dateToIdx = new Map(allDates.map((d, i) => [d, i]));
   const shiftDomain = (anchor: [string, string], dx: number) => {
     if (!chartWrapperRef.current || allDates.length === 0) return;
     const plotWidth = Math.max(1, chartWrapperRef.current.clientWidth - 64);
@@ -830,6 +831,25 @@ export default function Dashboard() {
                     )}
                   </LineChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+            {/* Horizontal scroll bar — pans the time window without changing zoom width */}
+            {!isChartLoading && chartData && allChartPoints.length > chartPoints.length && chartPoints.length > 0 && (
+              <div className="mt-2 flex items-center gap-2" style={{ paddingLeft: "56px", paddingRight: "8px" }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={allChartPoints.length - chartPoints.length}
+                  value={Math.max(0, dateToIdx.get(chartPoints[0].date as string) ?? 0)}
+                  onChange={(e) => {
+                    const startIdx = Number(e.target.value);
+                    const windowSize = chartPoints.length;
+                    const endIdx = Math.min(startIdx + windowSize - 1, allDates.length - 1);
+                    setZoomDomain([allDates[startIdx], allDates[endIdx]]);
+                  }}
+                  className="w-full h-1 cursor-pointer accent-primary"
+                  style={{ accentColor: "hsl(var(--primary))" }}
+                />
               </div>
             )}
             {showTpLines && tpSma > 0 && (
