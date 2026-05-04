@@ -65,48 +65,10 @@ const TP_TOOLTIP_LABELS: Record<string, string> = {
   _tp35: "TP2 +35%",
 };
 
-function CustomTooltip({ active, payload, label }: any) {
-  if (active && payload && payload.length) {
-    const mainEntries = payload.filter((e: any) => !String(e.dataKey).startsWith("_"));
-    const tpEntries   = payload.filter((e: any) => String(e.dataKey).startsWith("_tp"));
-    return (
-      <div className="bg-card border border-border p-3 rounded-md shadow-lg min-w-[210px]">
-        <p className="text-xs text-muted-foreground mb-2 font-mono">
-          {label ? format(new Date(label + "T00:00:00"), "MMM d, yyyy") : ""}
-        </p>
-        {mainEntries.map((entry: any, index: number) => (
-          <div key={index} className="flex items-center justify-between gap-4 text-xs font-medium py-0.5">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-              <span className="text-muted-foreground">{entry.name}</span>
-            </div>
-            <span className="text-foreground font-mono">{formatUsd(entry.value)}</span>
-          </div>
-        ))}
-        {tpEntries.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-border/50">
-            <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
-              Take Profit — this date
-            </p>
-            {tpEntries.map((entry: any) => (
-              <div key={entry.dataKey} className="flex items-center justify-between gap-4 text-xs font-medium py-0.5">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-sm shrink-0 opacity-80" style={{ backgroundColor: entry.color }} />
-                  <span className="text-muted-foreground">
-                    {TP_TOOLTIP_LABELS[entry.dataKey] ?? entry.dataKey}
-                  </span>
-                </div>
-                <span className="font-mono" style={{ color: entry.color }}>
-                  {formatUsd(entry.value)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-  return null;
+interface ChartTooltipState {
+  label: string;
+  mainEntries: Array<{ name: string; dataKey: string; color: string; value: number }>;
+  tpEntries: Array<{ dataKey: string; color: string; value: number }>;
 }
 
 // Zone ordering for the legend bar
@@ -121,6 +83,7 @@ const ZONE_THRESHOLDS = [
 export default function Dashboard() {
   const [now, setNow] = useState(new Date());
   const [showTpLines, setShowTpLines] = useState(true);
+  const [chartTooltip, setChartTooltip] = useState<ChartTooltipState | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
@@ -481,11 +444,63 @@ export default function Dashboard() {
             {isChartLoading || !chartData ? (
               <Skeleton className="h-[420px] w-full rounded-xl" />
             ) : (
-              <div className="h-[420px] w-full">
+              <div className="h-[420px] w-full relative">
+                {/* Pinned hover tooltip — top-right corner, never overlaps the chart */}
+                {chartTooltip && (
+                  <div className="absolute top-2 right-2 z-10 bg-card border border-border p-3 rounded-md shadow-lg min-w-[210px] pointer-events-none">
+                    <p className="text-xs text-muted-foreground mb-2 font-mono">
+                      {chartTooltip.label ? format(new Date(chartTooltip.label + "T00:00:00"), "MMM d, yyyy") : ""}
+                    </p>
+                    {chartTooltip.mainEntries.map((entry, index) => (
+                      <div key={index} className="flex items-center justify-between gap-4 text-xs font-medium py-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                          <span className="text-muted-foreground">{entry.name}</span>
+                        </div>
+                        <span className="text-foreground font-mono">{formatUsd(entry.value)}</span>
+                      </div>
+                    ))}
+                    {chartTooltip.tpEntries.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border/50">
+                        <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mb-1">
+                          Take Profit — this date
+                        </p>
+                        {chartTooltip.tpEntries.map((entry) => (
+                          <div key={entry.dataKey} className="flex items-center justify-between gap-4 text-xs font-medium py-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-sm shrink-0 opacity-80" style={{ backgroundColor: entry.color }} />
+                              <span className="text-muted-foreground">
+                                {TP_TOOLTIP_LABELS[entry.dataKey] ?? entry.dataKey}
+                              </span>
+                            </div>
+                            <span className="font-mono" style={{ color: entry.color }}>
+                              {formatUsd(entry.value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
                     data={chartPoints}
                     margin={{ top: 10, right: 8, left: 8, bottom: 0 }}
+                    onMouseMove={(e: any) => {
+                      if (e?.activePayload?.length) {
+                        const payload = e.activePayload;
+                        setChartTooltip({
+                          label: e.activeLabel ?? "",
+                          mainEntries: payload
+                            .filter((p: any) => !String(p.dataKey).startsWith("_") && p.value != null)
+                            .map((p: any) => ({ name: p.name, dataKey: p.dataKey, color: p.color, value: p.value })),
+                          tpEntries: payload
+                            .filter((p: any) => String(p.dataKey).startsWith("_tp") && p.value != null)
+                            .map((p: any) => ({ dataKey: p.dataKey, color: p.color, value: p.value })),
+                        });
+                      }
+                    }}
+                    onMouseLeave={() => setChartTooltip(null)}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                     <XAxis
@@ -509,7 +524,10 @@ export default function Dashboard() {
                       domain={[chartYMin, chartYMax]}
                       width={48}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip
+                      cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
+                      content={() => null}
+                    />
                     <Legend
                       iconType="circle"
                       iconSize={8}
