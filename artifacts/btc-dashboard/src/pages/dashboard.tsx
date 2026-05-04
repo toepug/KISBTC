@@ -82,11 +82,45 @@ const ZONE_THRESHOLDS = [
   { label: "Take Profit", color: "#ef4444" },
 ];
 
+const FRONTEND_ZONE_MULTIPLIERS: Record<string, number> = {
+  MAX_ACCUMULATION: 6,
+  AGGRESSIVE_BUY: 4,
+  STANDARD_BUY_LOW: 2,
+  STANDARD_BUY_HIGH: 1,
+  TAKE_PROFIT: 0,
+};
+
+const ZONE_ACTION_DESC: Record<string, string> = {
+  MAX_ACCUMULATION: "price is at or below the 200W WMA. Deploy maximum capital.",
+  AGGRESSIVE_BUY:   "price is below the 20W EMA. Strong buy signal.",
+  STANDARD_BUY_LOW: "price is at or below the 200D SMA. Standard DCA range.",
+  STANDARD_BUY_HIGH:"price is within 15% above the 200D SMA. Base contribution.",
+  TAKE_PROFIT:      "price is 15%+ above the 200D SMA. No new buys; manage exits only.",
+};
+
 export default function Dashboard() {
   const [now, setNow] = useState(new Date());
   const [showTpLines, setShowTpLines] = useState(true);
   const [chartTooltip, setChartTooltip] = useState<ChartTooltipState | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+
+  // Base contribution — persisted to localStorage
+  const [baseContribution, setBaseContribution] = useState<number>(() => {
+    const stored = localStorage.getItem("btc-base-contribution");
+    const parsed = stored ? parseInt(stored, 10) : NaN;
+    return !isNaN(parsed) && parsed > 0 ? parsed : 500;
+  });
+  const [baseInputVal, setBaseInputVal] = useState<string>(
+    String(localStorage.getItem("btc-base-contribution") && !isNaN(parseInt(localStorage.getItem("btc-base-contribution")!, 10))
+      ? parseInt(localStorage.getItem("btc-base-contribution")!, 10)
+      : 500)
+  );
+  const commitBase = (raw: string) => {
+    const val = Math.max(1, parseInt(raw, 10) || baseContribution);
+    setBaseContribution(val);
+    setBaseInputVal(String(val));
+    localStorage.setItem("btc-base-contribution", String(val));
+  };
 
   // Zoom & period state
   type ChartPeriod = "3M" | "6M" | "1Y" | "2Y";
@@ -160,6 +194,17 @@ export default function Dashboard() {
     dailyCandlesUsed?: number;
     weeklyCandlesUsed?: number;
   };
+
+  // Computed contribution amounts based on user's base
+  const currentZoneMult = dash?.zone ? (FRONTEND_ZONE_MULTIPLIERS[dash.zone] ?? 0) : 0;
+  const currentContribution = baseContribution * currentZoneMult;
+  const computedActionText = dash?.zone
+    ? (currentContribution > 0
+        ? `Contribute ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(currentContribution)} (${currentZoneMult}×) — ${ZONE_ACTION_DESC[dash.zone] ?? ""}`
+        : `Contribute $0 — ${ZONE_ACTION_DESC[dash.zone] ?? ""}`)
+    : "";
+  const fmtContrib = (mult: number) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(baseContribution * mult);
 
   // Take-profit levels derived from 200D SMA — TP1 +15%, TP2 +50%, TP3 +75%
   const tpSma = dash?.sma200d ?? 0;
@@ -243,7 +288,7 @@ export default function Dashboard() {
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">Long-term DCA strategy terminal</p>
         </div>
-        <div className="flex flex-col items-start md:items-end gap-1 text-sm">
+        <div className="flex flex-col items-start md:items-end gap-1.5 text-sm">
           <div className="flex items-center gap-2 text-foreground font-mono">
             <Clock className="w-4 h-4 text-muted-foreground" />
             {format(now, "MMM d, yyyy HH:mm:ss")}
@@ -261,6 +306,24 @@ export default function Dashboard() {
           ) : (
             <Skeleton className="h-4 w-48" />
           )}
+          {/* Base contribution input */}
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs text-muted-foreground">Base installment:</span>
+            <div className="flex items-center border border-border rounded-md overflow-hidden bg-muted/30 focus-within:border-primary transition-colors">
+              <span className="px-2 text-xs text-muted-foreground font-mono border-r border-border bg-muted/40">$</span>
+              <input
+                type="number"
+                min={1}
+                step={50}
+                value={baseInputVal}
+                onChange={(e) => setBaseInputVal(e.target.value)}
+                onBlur={(e) => commitBase(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                className="w-20 bg-transparent px-2 py-1 text-xs font-mono text-foreground focus:outline-none"
+              />
+            </div>
+            <span className="text-xs text-muted-foreground/60">/ installment</span>
+          </div>
         </div>
       </header>
 
@@ -307,7 +370,25 @@ export default function Dashboard() {
             )}
 
             <div className="bg-background/70 backdrop-blur-sm border border-border/60 px-5 py-3 rounded-full z-10">
-              <p className="text-base font-medium text-foreground">{dash.actionText}</p>
+              <p className="text-base font-medium text-foreground">{computedActionText}</p>
+            </div>
+
+            {/* All-zone amounts mini breakdown */}
+            <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1 z-10">
+              {[
+                { label: "Max Accum.", mult: 6, color: "#22c55e" },
+                { label: "Aggressive", mult: 4, color: "#4ade80" },
+                { label: "Std Low",    mult: 2, color: "#3b82f6" },
+                { label: "Std High",   mult: 1, color: "#eab308" },
+              ].map((z) => (
+                <div key={z.label} className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: z.color }} />
+                  <span className="text-[10px] text-muted-foreground/70">{z.label}:</span>
+                  <span className="text-[10px] font-mono font-semibold" style={{ color: z.color }}>
+                    {fmtContrib(z.mult)}
+                  </span>
+                </div>
+              ))}
             </div>
           </motion.div>
         )}
