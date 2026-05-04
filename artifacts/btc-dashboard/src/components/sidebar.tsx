@@ -16,7 +16,7 @@ export default function Sidebar() {
       <aside className="hidden md:flex flex-col w-52 shrink-0 border-r border-border bg-card min-h-screen sticky top-0 h-screen">
         <div className="flex items-center gap-2 px-5 py-5 border-b border-border">
           <Bitcoin className="w-5 h-5 text-primary shrink-0" />
-          <span className="font-bold text-sm text-foreground leading-tight">BTC Strategy</span>
+          <span className="font-bold text-sm text-foreground leading-tight">KISBTC Strategy</span>
         </div>
         <nav className="flex flex-col gap-1 p-3 flex-1">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {

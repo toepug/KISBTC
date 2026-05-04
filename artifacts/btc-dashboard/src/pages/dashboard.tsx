@@ -284,7 +284,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-primary shrink-0" />
-            Bitcoin Strategy Dashboard
+            Keep It Simple Bitcoin Strategy Dashboard
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">Long-term DCA strategy terminal</p>
         </div>
