@@ -399,10 +399,11 @@ function computeBacktest(
     const zoneResult = determineZone(price, wma200w, ema20w, sma200d);
     const zone = zoneResult.zone;
 
-    // Take-profit sells: TP1 at +20% above SMA, TP2 at +35%
+    // Take-profit sells: always check TP1 before TP2 so the lower level fires first
+    // Each tranche is a one-time sell of 20% of holdings at that moment
     const tpChecks: [boolean, string, string, number][] = [
-      [tp2, "tp2", "TP2 +35%", 1.35],
       [tp1, "tp1", "TP1 +20%", 1.20],
+      [tp2, "tp2", "TP2 +35%", 1.35],
     ];
     for (const [triggered, key, label, mult] of tpChecks) {
       if (!triggered && price >= sma200d * mult && btcHoldings > 0) {
@@ -413,7 +414,7 @@ function computeBacktest(
         if (key === "tp1") tp1 = true;
         else tp2 = true;
         trades.push({ date, type: "SELL", zone, label, price, amount: proceeds, btcDelta: -sellBtc });
-        break;
+        break; // one tranche per day; next tranche fires the following eligible day
       }
     }
 
