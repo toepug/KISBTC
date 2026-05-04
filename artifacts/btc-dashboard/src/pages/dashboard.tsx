@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import {
@@ -94,9 +94,37 @@ export default function Dashboard() {
   const [dragStart, setDragStart] = useState<string | null>(null);
   const [dragEnd, setDragEnd] = useState<string | null>(null);
 
+  // Pan state (Space + drag)
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const chartWrapperRef = useRef<HTMLDivElement>(null);
+  const panAnchorX = useRef<number | null>(null);
+  const panAnchorDomain = useRef<[string, string] | null>(null);
+
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat) {
+        e.preventDefault();
+        setSpaceHeld(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        setSpaceHeld(false);
+        panAnchorX.current = null;
+        panAnchorDomain.current = null;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
   }, []);
 
   const {
@@ -173,6 +201,30 @@ export default function Dashboard() {
 
   const isZoomed = zoomDomain !== null;
   const handleZoomReset = () => { setZoomDomain(null); setDragStart(null); setDragEnd(null); };
+
+  // Pan helper — shifts an ISO date string by N days, clamped to available data
+  const allDates = allChartPoints.map((p) => p.date as string);
+  const shiftDomain = (anchor: [string, string], dx: number) => {
+    if (!chartWrapperRef.current || allDates.length === 0) return;
+    const plotWidth = Math.max(1, chartWrapperRef.current.clientWidth - 64);
+    const visibleDays = chartPoints.length;
+    const daysPerPixel = visibleDays / plotWidth;
+    const shift = Math.round(dx * daysPerPixel);
+    if (shift === 0) return;
+
+    const msPerDay = 86_400_000;
+    const rangeMs =
+      new Date(anchor[1] + "T00:00:00").getTime() -
+      new Date(anchor[0] + "T00:00:00").getTime();
+    let newStartMs =
+      new Date(anchor[0] + "T00:00:00").getTime() + shift * msPerDay;
+    const minMs = new Date(allDates[0] + "T00:00:00").getTime();
+    const maxMs = new Date(allDates[allDates.length - 1] + "T00:00:00").getTime();
+    newStartMs = Math.max(minMs, Math.min(maxMs - rangeMs, newStartMs));
+    const newEndMs = newStartMs + rangeMs;
+    const fmt = (ms: number) => new Date(ms).toISOString().split("T")[0];
+    setZoomDomain([fmt(newStartMs), fmt(newEndMs)]);
+  };
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-5">
@@ -496,12 +548,37 @@ export default function Dashboard() {
               <Skeleton className="h-[420px] w-full rounded-xl" />
             ) : (
               <div
+                ref={chartWrapperRef}
                 className="h-[420px] w-full relative"
+                style={{ cursor: spaceHeld ? (panAnchorX.current !== null ? "grabbing" : "grab") : undefined }}
+                onMouseDown={(e) => {
+                  if (spaceHeld && chartPoints.length > 0) {
+                    panAnchorX.current = e.clientX;
+                    panAnchorDomain.current = [
+                      chartPoints[0].date as string,
+                      chartPoints[chartPoints.length - 1].date as string,
+                    ];
+                    e.preventDefault();
+                  }
+                }}
                 onMouseMove={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                  if (spaceHeld && panAnchorX.current !== null && panAnchorDomain.current) {
+                    const dx = panAnchorX.current - e.clientX;
+                    shiftDomain(panAnchorDomain.current, dx);
+                  }
                 }}
-                onMouseLeave={() => { setMousePos(null); setChartTooltip(null); }}
+                onMouseUp={() => {
+                  panAnchorX.current = null;
+                  panAnchorDomain.current = null;
+                }}
+                onMouseLeave={() => {
+                  setMousePos(null);
+                  setChartTooltip(null);
+                  panAnchorX.current = null;
+                  panAnchorDomain.current = null;
+                }}
               >
                 {/* Follows cursor — rendered above and to the left of the mouse */}
                 {chartTooltip && mousePos && (
@@ -551,8 +628,9 @@ export default function Dashboard() {
                   <LineChart
                     data={chartPoints}
                     margin={{ top: 10, right: 8, left: 8, bottom: 0 }}
-                    style={{ userSelect: "none", cursor: dragStart ? "col-resize" : "crosshair" }}
+                    style={{ userSelect: "none", cursor: spaceHeld ? "inherit" : (dragStart ? "col-resize" : "crosshair") }}
                     onMouseDown={(e: any) => {
+                      if (spaceHeld) return;
                       if (e?.activeLabel) {
                         setDragStart(e.activeLabel);
                         setDragEnd(null);
@@ -561,6 +639,7 @@ export default function Dashboard() {
                     }}
                     onMouseMove={(e: any) => {
                       if (!e?.activeLabel) return;
+                      if (spaceHeld || panAnchorX.current !== null) return;
                       if (dragStart) {
                         setDragEnd(e.activeLabel);
                         return;
