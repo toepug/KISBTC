@@ -126,6 +126,9 @@ export default function Strategy() {
             <p className="text-xs text-muted-foreground mt-1">
               Contributions on the <strong className="text-foreground">1st and 15th</strong> of each month. Check the dashboard the evening before to confirm zone.
             </p>
+            <p className="text-xs text-muted-foreground/70 mt-1 italic">
+              Dollar amounts below use <strong className="text-muted-foreground">$500</strong> as a base contribution for illustration — adjust yours on the Dashboard.
+            </p>
           </CardHeader>
           <CardContent className="p-5 pt-0">
             <div className="overflow-x-auto">
