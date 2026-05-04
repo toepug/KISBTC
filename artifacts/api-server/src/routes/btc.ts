@@ -429,6 +429,12 @@ function computeBacktest(
     const zoneResult = determineZone(price, wma200w, ema20w, sma200d);
     const zone = zoneResult.zone;
 
+    // Reset TP flags only when price drops clearly back below the TP1 trigger —
+    // using SMA×1.15 as the reset line (the top of Standard Buy High zone).
+    // This prevents whipsaw re-fires when price oscillates around the 1.20× boundary,
+    // while still allowing a fresh pair of TP tranches after a real pullback.
+    if (price < sma200d * 1.15) { tp1 = false; tp2 = false; }
+
     // Take-profit sells: always check TP1 before TP2 so the lower level fires first
     // Each tranche is a one-time sell of 20% of holdings at that moment
     const tpChecks: [boolean, string, string, number][] = [
