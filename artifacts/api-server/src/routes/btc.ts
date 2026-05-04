@@ -3,6 +3,7 @@ import { Router, type Request, type Response } from "express";
 const router = Router();
 
 const KRAKEN_BASE = "https://api.kraken.com/0/public";
+const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 
 type KrakenOhlcRow = [number, string, string, string, string, string, string, number];
 
@@ -23,45 +24,60 @@ interface KrakenTickerResult {
   };
 }
 
+interface CoinGeckoMarketChart {
+  prices: [number, number][];
+}
+
+interface DailyBar {
+  date: string;
+  price: number;
+}
+
 async function fetchUrl(url: string): Promise<globalThis.Response> {
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(30000),
   });
-  if (!res.ok) throw new Error(`Kraken API returned ${res.status}`);
+  if (!res.ok) throw new Error(`API ${res.status} for ${url}`);
   return res;
 }
 
-async function fetchDailyCandles(targetDays: number): Promise<KrakenOhlcRow[]> {
-  const allRows: KrakenOhlcRow[] = [];
-  const seenTimes = new Set<number>();
+interface CryptoCompareHistoday {
+  Data: {
+    Data: Array<{ time: number; close: number }>;
+  };
+}
 
-  const page1Res = await fetchUrl(`${KRAKEN_BASE}/OHLC?pair=XBTUSD&interval=1440`);
-  const page1 = (await page1Res.json()) as KrakenOhlcResult;
-  if (page1.error?.length) throw new Error("Kraken error: " + JSON.stringify(page1.error));
-  for (const row of page1.result.XXBTZUSD) {
-    if (!seenTimes.has(row[0])) { seenTimes.add(row[0]); allRows.push(row); }
-  }
-
-  if (allRows.length < targetDays && allRows.length > 0) {
-    const oldestTs = Math.min(...allRows.map((r) => r[0]));
-    const sinceTs = Math.floor(Date.now() / 1000) - targetDays * 86400;
-    const page2Res = await fetchUrl(
-      `${KRAKEN_BASE}/OHLC?pair=XBTUSD&interval=1440&since=${sinceTs}`
+// Fetch daily BTC close prices from CryptoCompare (2000+ continuous bars, free, no key).
+// Falls back to Kraken (~720 bars) if CryptoCompare is unavailable.
+async function fetchDailyBars(): Promise<DailyBar[]> {
+  const CC_BASE = "https://min-api.cryptocompare.com/data/v2";
+  try {
+    const res = await fetchUrl(
+      `${CC_BASE}/histoday?fsym=BTC&tsym=USD&limit=2000`
     );
-    const page2 = (await page2Res.json()) as KrakenOhlcResult;
-    if (!page2.error?.length) {
-      for (const row of page2.result.XXBTZUSD) {
-        if (!seenTimes.has(row[0]) && row[0] < oldestTs) {
-          seenTimes.add(row[0]);
-          allRows.push(row);
-        }
-      }
+    const data = (await res.json()) as CryptoCompareHistoday;
+    const rows = data?.Data?.Data;
+    if (!Array.isArray(rows) || rows.length === 0) throw new Error("CryptoCompare returned empty");
+    const seen = new Set<string>();
+    const bars: DailyBar[] = [];
+    for (const row of rows) {
+      const date = new Date(row.time * 1000).toISOString().split("T")[0];
+      if (!seen.has(date) && row.close > 0) { seen.add(date); bars.push({ date, price: row.close }); }
     }
+    bars.sort((a, b) => a.date.localeCompare(b.date));
+    // Drop today's partial bar — live Kraken ticker is source of truth for today
+    if (bars.length > 1) bars.pop();
+    return bars;
+  } catch {
+    // Fallback: Kraken daily (up to ~720 bars)
+    const res = await fetchUrl(`${KRAKEN_BASE}/OHLC?pair=XBTUSD&interval=1440`);
+    const data = (await res.json()) as KrakenOhlcResult;
+    if (data.error?.length) throw new Error("Kraken daily error");
+    return data.result.XXBTZUSD
+      .map((r) => ({ date: new Date(r[0] * 1000).toISOString().split("T")[0], price: parseFloat(r[4]) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
   }
-
-  allRows.sort((a, b) => a[0] - b[0]);
-  return allRows;
 }
 
 function calcSMA(prices: number[], period: number): (number | null)[] {
@@ -233,8 +249,8 @@ async function fetchBtcData() {
 
   fetchInFlight = (async () => {
     try {
-      const [dailyRows, weeklyRes, tickerRes] = await Promise.all([
-        fetchDailyCandles(1440),
+      const [dailyBars, weeklyRes, tickerRes] = await Promise.all([
+        fetchDailyBars(),
         fetchUrl(`${KRAKEN_BASE}/OHLC?pair=XBTUSD&interval=10080`),
         fetchUrl(`${KRAKEN_BASE}/Ticker?pair=XBTUSD`),
       ]);
@@ -244,12 +260,12 @@ async function fetchBtcData() {
 
       if (weeklyData.error?.length) throw new Error("Kraken weekly error");
 
-      const weeklyRows = weeklyData.result.XXBTZUSD;
+      // Sort weekly rows ascending by timestamp (Kraken should already do this,
+      // but guard against any edge-case ordering differences)
+      const weeklyRows = [...weeklyData.result.XXBTZUSD].sort((a, b) => a[0] - b[0]);
 
-      const dailyPrices = dailyRows.map((r) => parseFloat(r[4]));
-      const dailyDates = dailyRows.map((r) =>
-        new Date(r[0] * 1000).toISOString().split("T")[0]
-      );
+      const dailyPrices = dailyBars.map((b) => b.price);
+      const dailyDates = dailyBars.map((b) => b.date);
       const weeklyPrices = weeklyRows.map((r) => parseFloat(r[4]));
       const weeklyDates = weeklyRows.map((r) =>
         new Date(r[0] * 1000).toISOString().split("T")[0]
@@ -290,9 +306,23 @@ async function fetchBtcData() {
         lastUpdated: new Date().toISOString(),
       };
 
-      // Build chart: last 2 years of daily data
+      // Build chart: last 2 years of daily data, but never start before all
+      // indicators are valid so every line extends to the left edge of the chart.
       const chartWindowDays = 730;
-      const chartStartIdx = Math.max(0, dailyDates.length - chartWindowDays);
+      const firstValidSmaIdx = sma200dArr.findIndex((v) => v !== null);
+      // Also find the first daily date where the weekly EMA is valid
+      const firstValidEmaWeeklyIdx = ema20wArr.findIndex((v) => v !== null);
+      const firstEmaDate = firstValidEmaWeeklyIdx >= 0 ? weeklyDates[firstValidEmaWeeklyIdx] : null;
+      const firstValidEmaDailyIdx = firstEmaDate
+        ? Math.max(0, dailyDates.findIndex((d) => d >= firstEmaDate))
+        : 0;
+      const firstValidWmaWeeklyIdx = wma200wArr.findIndex((v) => v !== null);
+      const firstWmaDate = firstValidWmaWeeklyIdx >= 0 ? weeklyDates[firstValidWmaWeeklyIdx] : null;
+      const firstValidWmaDailyIdx = firstWmaDate
+        ? Math.max(0, dailyDates.findIndex((d) => d >= firstWmaDate))
+        : 0;
+      const firstValidIdx = Math.max(firstValidSmaIdx, firstValidEmaDailyIdx, firstValidWmaDailyIdx);
+      const chartStartIdx = Math.max(firstValidIdx, dailyDates.length - chartWindowDays);
 
       let lastWeeklyIdx = 0;
       const points = dailyDates.slice(chartStartIdx).map((date, idx) => {
