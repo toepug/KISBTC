@@ -11,6 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceArea,
 } from "recharts";
 import { Activity, Clock, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Minus, Eye, EyeOff } from "lucide-react";
 import {
@@ -86,6 +87,13 @@ export default function Dashboard() {
   const [chartTooltip, setChartTooltip] = useState<ChartTooltipState | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
 
+  // Zoom & period state
+  type ChartPeriod = "3M" | "6M" | "1Y" | "2Y";
+  const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("2Y");
+  const [zoomDomain, setZoomDomain] = useState<[string, string] | null>(null);
+  const [dragStart, setDragStart] = useState<string | null>(null);
+  const [dragEnd, setDragEnd] = useState<string | null>(null);
+
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
@@ -130,18 +138,9 @@ export default function Dashboard() {
   const tp35  = tpSma * 1.35;
   const fmtTpLabel = (v: number) => `$${(v / 1000).toFixed(0)}k`;
 
-  // Chart Y-axis bounds
-  const chartPrices = (chartData as any)?.points?.map((p: any) => p.price).filter(Boolean) as number[] | undefined;
-  const chartDataMax = chartPrices?.length ? Math.max(...chartPrices) : 0;
-  const chartDataMin = chartPrices?.length ? Math.min(...chartPrices) : 0;
-  const chartYMax = showTpLines && tp35 > 0
-    ? Math.max(chartDataMax, tp35) * 1.06
-    : chartDataMax * 1.04;
-  const chartYMin = chartDataMin * 0.96;
-
   // Inject dynamic TP and zone boundary fields per point (computed from each point's own 200D SMA)
   const rawPoints: Record<string, unknown>[] = (chartData as any)?.points ?? [];
-  const chartPoints = rawPoints.map((p) => {
+  const allChartPoints = rawPoints.map((p) => {
     const ptSma = p.sma200d as number | null | undefined;
     return {
       ...p,
@@ -150,6 +149,30 @@ export default function Dashboard() {
       _tp35: showTpLines && ptSma != null ? ptSma * 1.35 : undefined,
     };
   });
+
+  // Period filter: slice to selected range
+  const periodCutoff = (() => {
+    const months = { "3M": 3, "6M": 6, "1Y": 12, "2Y": 24 }[chartPeriod];
+    const d = new Date();
+    d.setMonth(d.getMonth() - months);
+    return d.toISOString().split("T")[0];
+  })();
+  const periodPoints = allChartPoints.filter((p) => (p.date as string) >= periodCutoff);
+
+  // Zoom filter: further narrow to drag-zoom selection
+  const chartPoints = zoomDomain
+    ? periodPoints.filter((p) => (p.date as string) >= zoomDomain[0] && (p.date as string) <= zoomDomain[1])
+    : periodPoints;
+
+  // Y-axis bounds derived from the visible slice
+  const visiblePrices = chartPoints.map((p) => p.price as number).filter(Boolean);
+  const visibleMax = visiblePrices.length ? Math.max(...visiblePrices) : 0;
+  const visibleMin = visiblePrices.length ? Math.min(...visiblePrices) : 0;
+  const chartYMax = showTpLines && tp35 > 0 ? Math.max(visibleMax, tp35) * 1.06 : visibleMax * 1.04;
+  const chartYMin = visibleMin * 0.96;
+
+  const isZoomed = zoomDomain !== null;
+  const handleZoomReset = () => { setZoomDomain(null); setDragStart(null); setDragEnd(null); };
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-5">
@@ -421,25 +444,52 @@ export default function Dashboard() {
       {/* Chart */}
       <section>
         <Card className="bg-card border-border">
-          <CardHeader className="p-4 border-b border-border flex flex-row items-center gap-2">
-            <Activity className="w-5 h-5 text-primary shrink-0" />
-            <div className="flex-1 min-w-0">
-              <CardTitle className="text-base">Price vs Moving Averages (2-Year Daily)</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                BTC price with 200W WMA · 20W EMA · 200D SMA · Take Profit levels
-              </p>
+          <CardHeader className="p-4 border-b border-border">
+            <div className="flex flex-row items-center gap-2">
+              <Activity className="w-5 h-5 text-primary shrink-0" />
+              <div className="flex-1 min-w-0">
+                <CardTitle className="text-base">Price vs Moving Averages</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {isZoomed ? "Zoomed — drag to select a new range · " : "Drag chart to zoom · "}
+                  200W WMA · 20W EMA · 200D SMA
+                </p>
+              </div>
+              <button
+                onClick={() => setShowTpLines((v) => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors shrink-0 ${
+                  showTpLines
+                    ? "border-orange-500/50 bg-orange-950/30 text-orange-400 hover:bg-orange-950/50"
+                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+                }`}
+              >
+                {showTpLines ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                TP Lines
+              </button>
             </div>
-            <button
-              onClick={() => setShowTpLines((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors shrink-0 ${
-                showTpLines
-                  ? "border-orange-500/50 bg-orange-950/30 text-orange-400 hover:bg-orange-950/50"
-                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
-              }`}
-            >
-              {showTpLines ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-              TP Lines
-            </button>
+            {/* Period selector + zoom reset */}
+            <div className="flex items-center gap-1.5 mt-3">
+              {(["3M", "6M", "1Y", "2Y"] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => { setChartPeriod(p); handleZoomReset(); }}
+                  className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
+                    chartPeriod === p && !isZoomed
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+              {isZoomed && (
+                <button
+                  onClick={handleZoomReset}
+                  className="ml-1 px-2.5 py-1 rounded text-xs font-semibold bg-primary text-primary-foreground transition-colors"
+                >
+                  Reset zoom
+                </button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="p-4 md:p-6">
             {isChartLoading || !chartData ? (
@@ -501,7 +551,20 @@ export default function Dashboard() {
                   <LineChart
                     data={chartPoints}
                     margin={{ top: 10, right: 8, left: 8, bottom: 0 }}
+                    style={{ userSelect: "none", cursor: dragStart ? "col-resize" : "crosshair" }}
+                    onMouseDown={(e: any) => {
+                      if (e?.activeLabel) {
+                        setDragStart(e.activeLabel);
+                        setDragEnd(null);
+                        setChartTooltip(null);
+                      }
+                    }}
                     onMouseMove={(e: any) => {
+                      if (!e?.activeLabel) return;
+                      if (dragStart) {
+                        setDragEnd(e.activeLabel);
+                        return;
+                      }
                       if (e?.activePayload?.length) {
                         const payload = e.activePayload;
                         setChartTooltip({
@@ -514,6 +577,14 @@ export default function Dashboard() {
                             .map((p: any) => ({ dataKey: p.dataKey, color: p.color, value: p.value })),
                         });
                       }
+                    }}
+                    onMouseUp={(e: any) => {
+                      if (dragStart && dragEnd && dragStart !== dragEnd) {
+                        const [l, r] = [dragStart, dragEnd].sort();
+                        setZoomDomain([l, r]);
+                      }
+                      setDragStart(null);
+                      setDragEnd(null);
                     }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -539,7 +610,7 @@ export default function Dashboard() {
                       width={48}
                     />
                     <Tooltip
-                      cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
+                      cursor={dragStart ? false : { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
                       content={() => null}
                     />
                     <Legend
@@ -665,6 +736,19 @@ export default function Dashboard() {
                       isAnimationActive={false}
                       connectNulls={false}
                     />
+                    {/* Drag-to-zoom selection overlay */}
+                    {dragStart && dragEnd && dragStart !== dragEnd && (
+                      <ReferenceArea
+                        yAxisId="price"
+                        x1={[dragStart, dragEnd].sort()[0]}
+                        x2={[dragStart, dragEnd].sort()[1]}
+                        fill="hsl(var(--primary))"
+                        fillOpacity={0.12}
+                        stroke="hsl(var(--primary))"
+                        strokeOpacity={0.5}
+                        strokeWidth={1}
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
