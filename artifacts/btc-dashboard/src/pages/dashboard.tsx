@@ -61,7 +61,6 @@ function PctBadge({ pct }: { pct: number }) {
 }
 
 const TP_TOOLTIP_LABELS: Record<string, string> = {
-  _sma115: "SMA × 1.15",
   _tp20: "TP1 +20%",
   _tp35: "TP2 +35%",
 };
@@ -182,7 +181,7 @@ export default function Dashboard() {
     const ptSma = p.sma200d as number | null | undefined;
     return {
       ...p,
-      _sma115: ptSma != null ? ptSma * 1.15 : undefined,
+      sma115: ptSma != null ? ptSma * 1.15 : undefined,
       _tp20: showTpLines && ptSma != null ? ptSma * 1.20 : undefined,
       _tp35: showTpLines && ptSma != null ? ptSma * 1.35 : undefined,
     };
@@ -521,7 +520,7 @@ export default function Dashboard() {
                         { value: "200W WMA",   type: "circle", id: "wma200w", color: "#22c55e" },
                         { value: "20W EMA",    type: "circle", id: "ema20w",  color: "#4ade80" },
                         { value: "200D SMA",   type: "circle", id: "sma200d", color: "#3b82f6" },
-                        { value: "SMA × 1.15", type: "circle", id: "_sma115", color: "#eab308" },
+                        { value: "SMA × 1.15", type: "circle", id: "sma115",  color: "#eab308" },
                       ]}
                     />
                     <Line
@@ -600,7 +599,7 @@ export default function Dashboard() {
                     <Line
                       yAxisId="price"
                       type="monotone"
-                      dataKey="_sma115"
+                      dataKey="sma115"
                       name="SMA × 1.15"
                       stroke="#eab308"
                       strokeWidth={1.5}
