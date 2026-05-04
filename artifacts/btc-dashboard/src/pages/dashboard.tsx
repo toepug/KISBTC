@@ -187,9 +187,10 @@ export default function Dashboard() {
   })();
   const periodPoints = allChartPoints.filter((p) => (p.date as string) >= periodCutoff);
 
-  // Zoom filter: further narrow to drag-zoom selection
+  // Zoom filter: when a domain is active, apply it directly to allChartPoints so
+  // scrolling/panning is never clipped by the period boundary.
   const chartPoints = zoomDomain
-    ? periodPoints.filter((p) => (p.date as string) >= zoomDomain[0] && (p.date as string) <= zoomDomain[1])
+    ? allChartPoints.filter((p) => (p.date as string) >= zoomDomain[0] && (p.date as string) <= zoomDomain[1])
     : periodPoints;
 
   // Y-axis bounds derived from the visible slice
