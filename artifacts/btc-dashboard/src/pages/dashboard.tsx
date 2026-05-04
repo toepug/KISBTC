@@ -518,10 +518,10 @@ export default function Dashboard() {
                       formatter={(value: string) => value.startsWith("_") ? null : value}
                       payload={[
                         { value: "BTC Price",  type: "circle", id: "price",   color: "hsl(var(--foreground))" },
-                        { value: "200W WMA",   type: "circle", id: "wma200w", color: "#ef4444" },
-                        { value: "20W EMA",    type: "circle", id: "ema20w",  color: "#3b82f6" },
-                        { value: "200D SMA",   type: "circle", id: "sma200d", color: "#eab308" },
-                        { value: "SMA × 1.15", type: "circle", id: "_sma115", color: "#c084fc" },
+                        { value: "200W WMA",   type: "circle", id: "wma200w", color: "#22c55e" },
+                        { value: "20W EMA",    type: "circle", id: "ema20w",  color: "#4ade80" },
+                        { value: "200D SMA",   type: "circle", id: "sma200d", color: "#3b82f6" },
+                        { value: "SMA × 1.15", type: "circle", id: "_sma115", color: "#eab308" },
                       ]}
                     />
                     <Line
@@ -539,7 +539,7 @@ export default function Dashboard() {
                       type="monotone"
                       dataKey="wma200w"
                       name="200W WMA"
-                      stroke="#ef4444"
+                      stroke="#22c55e"
                       strokeWidth={1.5}
                       strokeDasharray="4 2"
                       dot={false}
@@ -550,7 +550,7 @@ export default function Dashboard() {
                       type="monotone"
                       dataKey="ema20w"
                       name="20W EMA"
-                      stroke="#3b82f6"
+                      stroke="#4ade80"
                       strokeWidth={1.5}
                       dot={false}
                       connectNulls
@@ -560,7 +560,7 @@ export default function Dashboard() {
                       type="monotone"
                       dataKey="sma200d"
                       name="200D SMA"
-                      stroke="#eab308"
+                      stroke="#3b82f6"
                       strokeWidth={1.5}
                       dot={false}
                       connectNulls
@@ -602,7 +602,7 @@ export default function Dashboard() {
                       type="monotone"
                       dataKey="_sma115"
                       name="SMA × 1.15"
-                      stroke="#c084fc"
+                      stroke="#eab308"
                       strokeWidth={1.5}
                       strokeDasharray="5 3"
                       dot={false}
