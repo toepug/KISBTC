@@ -71,9 +71,15 @@ const TAKE_PROFIT_ROWS = [
   },
   {
     tranche: "TP2 — 20% of holdings",
-    trigger: "Price ≥ 200D SMA × 1.35  (+35%)",
+    trigger: "Price ≥ 200D SMA × 1.30  (+30%)",
     action: "Sell another 20% of BTC holdings",
     color: "#ef4444",
+  },
+  {
+    tranche: "TP3 — 20% of holdings",
+    trigger: "Price ≥ 200D SMA × 1.40  (+40%)",
+    action: "Sell another 20% of BTC holdings",
+    color: "#dc2626",
   },
 ];
 

@@ -175,8 +175,8 @@ function determineZone(
     };
   }
 
-  // Take Profit 1: +20% to +35%
-  if (price < sma200d * 1.35) {
+  // Take Profit 1: +20% to +30%
+  if (price < sma200d * 1.30) {
     return {
       zone: "TAKE_PROFIT",
       triggerIndicator: "200D SMA",
@@ -184,11 +184,20 @@ function determineZone(
     };
   }
 
-  // Take Profit 2: +35% and above
+  // Take Profit 2: +30% to +40%
+  if (price < sma200d * 1.40) {
+    return {
+      zone: "TAKE_PROFIT",
+      triggerIndicator: "200D SMA",
+      triggerDetail: `Price +30% above 200D SMA ($${smafmt(sma200d)}) — TP2`,
+    };
+  }
+
+  // Take Profit 3: +40% and above
   return {
     zone: "TAKE_PROFIT",
     triggerIndicator: "200D SMA",
-    triggerDetail: `Price +35% above 200D SMA ($${smafmt(sma200d)}) — TP2`,
+    triggerDetail: `Price +40% above 200D SMA ($${smafmt(sma200d)}) — TP3`,
   };
 }
 
@@ -399,7 +408,7 @@ function computeBacktest(
   let btcHoldings = 0;
   let cashBalance = startingCash;
   let totalInvested = 0;
-  let tp1 = false, tp2 = false;
+  let tp1 = false, tp2 = false, tp3 = false;
   let dcaBtc = 0, dcaInvested = 0;
   let peakValue = startingCash;
 
@@ -429,17 +438,16 @@ function computeBacktest(
     const zoneResult = determineZone(price, wma200w, ema20w, sma200d);
     const zone = zoneResult.zone;
 
-    // Reset TP flags only when price drops clearly back below the TP1 trigger —
-    // using SMA×1.15 as the reset line (the top of Standard Buy High zone).
-    // This prevents whipsaw re-fires when price oscillates around the 1.20× boundary,
-    // while still allowing a fresh pair of TP tranches after a real pullback.
-    if (price < sma200d * 1.15) { tp1 = false; tp2 = false; }
+    // Reset TP flags when price drops clearly back below the TP1 trigger.
+    // SMA×1.15 is the hysteresis band — prevents whipsaw re-fires while still
+    // allowing fresh tranches after a real pullback.
+    if (price < sma200d * 1.15) { tp1 = false; tp2 = false; tp3 = false; }
 
-    // Take-profit sells: always check TP1 before TP2 so the lower level fires first
-    // Each tranche is a one-time sell of 20% of holdings at that moment
+    // Take-profit sells: check TP1 → TP2 → TP3 in order; one tranche per day
     const tpChecks: [boolean, string, string, number][] = [
       [tp1, "tp1", "TP1 +20%", 1.20],
-      [tp2, "tp2", "TP2 +35%", 1.35],
+      [tp2, "tp2", "TP2 +30%", 1.30],
+      [tp3, "tp3", "TP3 +40%", 1.40],
     ];
     for (const [triggered, key, label, mult] of tpChecks) {
       if (!triggered && price >= sma200d * mult && btcHoldings > 0) {
@@ -448,7 +456,8 @@ function computeBacktest(
         btcHoldings -= sellBtc;
         cashBalance += proceeds;
         if (key === "tp1") tp1 = true;
-        else tp2 = true;
+        else if (key === "tp2") tp2 = true;
+        else tp3 = true;
         trades.push({ date, type: "SELL", zone, label, price, amount: proceeds, btcDelta: -sellBtc });
         break; // one tranche per day; next tranche fires the following eligible day
       }
