@@ -105,7 +105,7 @@ export default function Strategy() {
           </CardHeader>
           <CardContent className="p-5 pt-0 space-y-3 text-sm text-muted-foreground leading-relaxed">
             <p>
-              This strategy uses <strong className="text-foreground">Questrade's $0 commission</strong> on ETF purchases to implement a disciplined, zone-based DCA (Dollar-Cost Averaging) approach to Bitcoin accumulation. It is designed for long-term investors who want to buy more aggressively at cycle lows and reduce exposure at cycle highs — automatically, without emotion.
+              This strategy uses <strong className="text-foreground">Questrade's $0 commission</strong> on ETF purchases to implement a disciplined, zone-based DCA (Dollar-Cost Averaging) approach to Bitcoin accumulation using <strong className="text-foreground">BTCC.B</strong> (Purpose Bitcoin ETF). It is designed for long-term investors who want to buy more aggressively at cycle lows and reduce exposure at cycle highs — automatically, without emotion.
             </p>
             <div className="flex items-start gap-2 bg-primary/10 border border-primary/25 rounded-lg p-3 text-foreground">
               <Banknote className="w-4 h-4 text-primary mt-0.5 shrink-0" />
