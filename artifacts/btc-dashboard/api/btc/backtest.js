@@ -112,7 +112,6 @@ export default async function handler(req) {
   const ema20wDaily = forwardFillWeeklyToDaily(dailyTimes, weeklyTimes, ema20wSeries);
   const wma200wDaily = forwardFillWeeklyToDaily(dailyTimes, weeklyTimes, wma200wSeries);
 
-  // Build enriched daily points
   const allPoints = dailyData.map((d, i) => ({
     date: unixToISO(d.time),
     price: d.close,
@@ -121,14 +120,13 @@ export default async function handler(req) {
     wma200w: wma200wDaily[i],
   }));
 
-  // Clamp start date to available data
   let startIdx = allPoints.findIndex((p) => p.date >= startDate && p.sma200d !== null && p.ema20w !== null && p.wma200w !== null);
   if (startIdx === -1) startIdx = allPoints.findIndex((p) => p.sma200d !== null && p.ema20w !== null && p.wma200w !== null);
   const simPoints = allPoints.slice(startIdx);
 
   // Simulation state
   let btcHeld = 0;
-  let cashBalance = startingCash;
+  let cashBalance = startingCash; // only startingCash + TP proceeds + interest; NEVER touched by contributions
   let totalInvested = 0;
   let tp1Fired = false, tp2Fired = false, tp3Fired = false;
 
@@ -148,15 +146,15 @@ export default async function handler(req) {
     const { date, price, sma200d, ema20w, wma200w } = point;
     const zone = getZone(price, wma200w, ema20w, sma200d);
 
-    // Cash earns 4% APY daily
+    // Cash earns 4% APY daily (only on the cashBalance pot)
     cashBalance *= (1 + DAILY_RATE);
 
-    // Reset TP flags if price drops below SMA * 1.10
+    // Reset TP flags when price drops back below SMA * 1.10
     if (sma200d && price < sma200d * 1.10) {
       tp1Fired = false; tp2Fired = false; tp3Fired = false;
     }
 
-    // Take profit sells (fire once per cycle)
+    // Take profit sells — proceeds go into cashBalance
     if (sma200d && btcHeld > 0) {
       if (!tp1Fired && price >= sma200d * 1.15) {
         const btcToSell = btcHeld * 0.25;
@@ -185,12 +183,20 @@ export default async function handler(req) {
     }
 
     // Contributions on 1st and 15th
+    // Base installment = fresh external capital (never touches cashBalance)
+    // Extra above base = drawn from cashBalance; if insufficient, fall back to base only
     if (isContributionDay(date) && zone && zone.multiplier > 0) {
-      const contribution = baseInstallment * zone.multiplier;
+      const fullContribution = baseInstallment * zone.multiplier;
+      const extraNeeded = fullContribution - baseInstallment;
+      let contribution = baseInstallment; // always at least base
+      if (extraNeeded > 0 && cashBalance >= extraNeeded) {
+        contribution = fullContribution;
+        cashBalance -= extraNeeded; // draw extra from cashBalance
+      }
       const btcBought = contribution / price;
       btcHeld += btcBought;
-      cashBalance -= contribution;
       totalInvested += contribution;
+
       trades.push({ date, type: "BUY", zone: zone.key, label: zone.label, price, amount: contribution, btcDelta: btcBought });
 
       if (!zoneStatsMap[zone.key]) {
@@ -199,7 +205,7 @@ export default async function handler(req) {
       zoneStatsMap[zone.key].count++;
       zoneStatsMap[zone.key].totalDeployed += contribution;
 
-      // DCA benchmark: fixed baseInstallment every contribution day
+      // DCA benchmark: fixed baseInstallment every contribution day regardless of zone
       dcaBtc += baseInstallment / price;
       dcaInvested += baseInstallment;
     }
@@ -212,15 +218,7 @@ export default async function handler(req) {
     const drawdown = peakValue > 0 ? ((peakValue - portfolioValue) / peakValue) * 100 : 0;
     if (drawdown > maxDrawdown) maxDrawdown = drawdown;
 
-    history.push({
-      date,
-      portfolioValue,
-      btcValue,
-      cashBalance,
-      dcaValue,
-      price,
-      zone: zone?.key ?? "TAKE_PROFIT",
-    });
+    history.push({ date, portfolioValue, btcValue, cashBalance, dcaValue, price, zone: zone?.key ?? "TAKE_PROFIT" });
   }
 
   const finalPrice = simPoints[simPoints.length - 1]?.price ?? lastPrice;
