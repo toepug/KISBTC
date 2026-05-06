@@ -54,7 +54,9 @@ function getZone(price, wma200w, ema20w, sma200d) {
   if (price <= ema20w) return { key: "AGGRESSIVE_BUY", label: "Aggressive Buy", multiplier: 4, color: "#86efac" };
   if (price <= sma200d) return { key: "STANDARD_BUY_LOW", label: "Standard Buy (Low)", multiplier: 2, color: "#3b82f6" };
   if (price < sma200d * 1.15) return { key: "STANDARD_BUY_HIGH", label: "Standard Buy (High)", multiplier: 1, color: "#facc15" };
-  return { key: "TAKE_PROFIT", label: "Take Profit", multiplier: 0, color: "#ef4444" };
+  if (price < sma200d * 1.50) return { key: "TAKE_PROFIT_1", label: "Take Profit — TP1", multiplier: 0, color: "#f97316" };
+  if (price < sma200d * 1.75) return { key: "TAKE_PROFIT_2", label: "Take Profit — TP2", multiplier: 0, color: "#ef4444" };
+  return { key: "TAKE_PROFIT_3", label: "Take Profit — TP3", multiplier: 0, color: "#7f1d1d" };
 }
 
 function isContributionDay(dateStr) {
