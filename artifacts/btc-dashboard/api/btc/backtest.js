@@ -231,8 +231,8 @@ export default async function handler(req) {
   const btcValue = btcHeld * finalPrice;
   const finalValue = btcValue + cashBalance;
   const dcaFinalValue = dcaBtc * finalPrice + dcaCash;
-  const netProfit = finalValue - totalInvested - startingCash;
-  const totalCapital = totalInvested + startingCash;
+  const netProfit = finalValue - totalInvested;
+  const totalCapital = totalInvested;
   const returnPct = totalCapital > 0 ? (netProfit / totalCapital) * 100 : 0;
 
   const result = {
