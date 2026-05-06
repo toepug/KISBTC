@@ -231,9 +231,12 @@ export default async function handler(req) {
   const btcValue = btcHeld * finalPrice;
   const finalValue = btcValue + cashBalance;
   const dcaFinalValue = dcaBtc * finalPrice + dcaCash;
-  const netProfit = finalValue - totalInvested;
-  const totalCapital = totalInvested;
-  const returnPct = totalCapital > 0 ? (netProfit / totalCapital) * 100 : 0;
+  // External capital = starting cash + base contributions (one per contribution day)
+  // totalInvested includes extras drawn from startingCash, so we can't use it directly
+  const numBuys = trades.filter((t) => t.type === "BUY").length;
+  const externalCapital = startingCash + (numBuys * baseInstallment);
+  const netProfit = finalValue - externalCapital;
+  const returnPct = externalCapital > 0 ? (netProfit / externalCapital) * 100 : 0;
 
   const result = {
     startDate: simPoints[0]?.date ?? startDate,
