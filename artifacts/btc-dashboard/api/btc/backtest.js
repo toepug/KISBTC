@@ -54,14 +54,16 @@ function getZone(price, wma200w, ema20w, sma200d) {
   if (price <= ema20w) return { key: "AGGRESSIVE_BUY", label: "Aggressive Buy", multiplier: 4, color: "#86efac" };
   if (price <= sma200d) return { key: "STANDARD_BUY_LOW", label: "Standard Buy (Low)", multiplier: 2, color: "#3b82f6" };
   if (price < sma200d * 1.15) return { key: "STANDARD_BUY_HIGH", label: "Standard Buy (High)", multiplier: 1, color: "#facc15" };
-  if (price < sma200d * 1.50) return { key: "TAKE_PROFIT_1", label: "Take Profit — TP1", multiplier: 0, color: "#f97316" };
-  if (price < sma200d * 1.75) return { key: "TAKE_PROFIT_2", label: "Take Profit — TP2", multiplier: 0, color: "#ef4444" };
-  return { key: "TAKE_PROFIT_3", label: "Take Profit — TP3", multiplier: 0, color: "#7f1d1d" };
+  return { key: "TAKE_PROFIT", label: "Take Profit", multiplier: 0, color: "#ef4444" };
 }
 
 function isContributionDay(dateStr) {
   const day = parseInt(dateStr.slice(8, 10));
   return day === 1 || day === 15;
+}
+
+function isSunday(dateStr) {
+  return new Date(dateStr + "T00:00:00Z").getUTCDay() === 0;
 }
 
 export default async function handler(req) {
@@ -158,15 +160,15 @@ export default async function handler(req) {
       tp1Fired = false; tp2Fired = false; tp3Fired = false;
     }
 
-    // Take profit sells — proceeds go into cashBalance
-    if (sma200d && btcHeld > 0) {
+    // Take profit sells — check on Sundays only (weekly close)
+    if (isSunday(date) && sma200d && btcHeld > 0) {
       if (!tp1Fired && price >= sma200d * 1.15) {
         const btcToSell = btcHeld * 0.25;
         const proceeds = btcToSell * price;
         btcHeld -= btcToSell;
         cashBalance += proceeds;
         tp1Fired = true;
-        trades.push({ date, type: "SELL", zone: zone?.key ?? "TAKE_PROFIT", label: "TP1 +15%", price, amount: proceeds, btcDelta: -btcToSell });
+        trades.push({ date, type: "SELL", zone: "TAKE_PROFIT", label: "TP1 +15%", price, amount: proceeds, btcDelta: -btcToSell });
       }
       if (!tp2Fired && price >= sma200d * 1.50) {
         const btcToSell = btcHeld * 0.25;
@@ -174,7 +176,7 @@ export default async function handler(req) {
         btcHeld -= btcToSell;
         cashBalance += proceeds;
         tp2Fired = true;
-        trades.push({ date, type: "SELL", zone: zone?.key ?? "TAKE_PROFIT", label: "TP2 +50%", price, amount: proceeds, btcDelta: -btcToSell });
+        trades.push({ date, type: "SELL", zone: "TAKE_PROFIT", label: "TP2 +50%", price, amount: proceeds, btcDelta: -btcToSell });
       }
       if (!tp3Fired && price >= sma200d * 1.75) {
         const btcToSell = btcHeld * 0.25;
@@ -182,7 +184,7 @@ export default async function handler(req) {
         btcHeld -= btcToSell;
         cashBalance += proceeds;
         tp3Fired = true;
-        trades.push({ date, type: "SELL", zone: zone?.key ?? "TAKE_PROFIT", label: "TP3 +75%", price, amount: proceeds, btcDelta: -btcToSell });
+        trades.push({ date, type: "SELL", zone: "TAKE_PROFIT", label: "TP3 +75%", price, amount: proceeds, btcDelta: -btcToSell });
       }
     }
 
@@ -222,7 +224,7 @@ export default async function handler(req) {
     const drawdown = peakValue > 0 ? ((peakValue - portfolioValue) / peakValue) * 100 : 0;
     if (drawdown > maxDrawdown) maxDrawdown = drawdown;
 
-    history.push({ date, portfolioValue, btcValue, cashBalance, dcaValue, price, zone: zone?.key ?? "TAKE_PROFIT" });
+    history.push({ date, portfolioValue, btcValue, cashBalance, dcaValue, price, zone: "TAKE_PROFIT" });
   }
 
   const finalPrice = simPoints[simPoints.length - 1]?.price ?? lastPrice;
