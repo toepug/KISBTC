@@ -133,6 +133,7 @@ export default async function handler(req) {
   // DCA benchmark
   let dcaBtc = 0;
   let dcaInvested = 0;
+  let dcaCash = startingCash; // starting cash also earns 4% APY in DCA benchmark
 
   const history = [];
   const trades = [];
@@ -146,8 +147,9 @@ export default async function handler(req) {
     const { date, price, sma200d, ema20w, wma200w } = point;
     const zone = getZone(price, wma200w, ema20w, sma200d);
 
-    // Cash earns 4% APY daily (only on the cashBalance pot)
+    // Cash earns 4% APY daily
     cashBalance *= (1 + DAILY_RATE);
+    dcaCash *= (1 + DAILY_RATE);
 
     // Reset TP flags when price drops back below SMA * 1.10
     if (sma200d && price < sma200d * 1.10) {
@@ -212,7 +214,7 @@ export default async function handler(req) {
 
     const btcValue = btcHeld * price;
     const portfolioValue = btcValue + cashBalance;
-    const dcaValue = dcaBtc * price;
+    const dcaValue = dcaBtc * price + dcaCash;
 
     if (portfolioValue > peakValue) peakValue = portfolioValue;
     const drawdown = peakValue > 0 ? ((peakValue - portfolioValue) / peakValue) * 100 : 0;
@@ -224,7 +226,7 @@ export default async function handler(req) {
   const finalPrice = simPoints[simPoints.length - 1]?.price ?? lastPrice;
   const btcValue = btcHeld * finalPrice;
   const finalValue = btcValue + cashBalance;
-  const dcaFinalValue = dcaBtc * finalPrice;
+  const dcaFinalValue = dcaBtc * finalPrice + dcaCash;
   const netProfit = finalValue - totalInvested - startingCash;
   const totalCapital = totalInvested + startingCash;
   const returnPct = totalCapital > 0 ? (netProfit / totalCapital) * 100 : 0;
